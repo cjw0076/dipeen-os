@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/auth";
-
-const DEV_API = "http://localhost:8000";
+import { getApiBaseUrl, isLocalApiBase } from "@/lib/api-base";
 
 export function LoginGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -20,8 +19,8 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
 
       // 로컬 개발(API가 localhost): UI를 직접 띄워 확인할 수 있게 통과시킨다.
       // dev-token bootstrap은 backend에 DIPEEN_DEV_TOKEN이 설정된 경우에만 켠다.
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || DEV_API;
-      const isLocal = /localhost|127\.0\.0\.1/.test(apiBase);
+      const apiBase = getApiBaseUrl();
+      const isLocal = isLocalApiBase(apiBase);
       if (isLocal) {
         const shouldTryDevToken =
           process.env.NEXT_PUBLIC_ENABLE_DEV_TOKEN === "true" || !process.env.NEXT_PUBLIC_API_URL;
