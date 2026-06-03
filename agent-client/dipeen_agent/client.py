@@ -57,6 +57,9 @@ class AgentClient:
         if DIPEEN_TOKEN:
             headers["Authorization"] = f"Bearer {DIPEEN_TOKEN}"
         self._http = httpx.AsyncClient(base_url=self.api_url, timeout=60.0, headers=headers)
+        self._worker_id: str | None = None       # register가 서버 canonical id로 채움
+        self._worker_token: str | None = None     # worker-scoped JWT (메모리; register마다 갱신)
+        self._lease_id: str | None = None          # 최근 poll의 lease (result에 전달)
 
     async def _retry(self, coro_fn, retries: int = MAX_RETRIES):
         """J-4: HTTP 에러 분류 기반 재시도 래퍼."""
@@ -125,21 +128,30 @@ class AgentClient:
         return await self._retry(_call)
 
     async def register_worker(self, capabilities: list[str], workspaces: list | None = None) -> dict:
-        """NAT Product Alpha worker 등록. legacy /api/agents 등록과 별개인 실행 노드 계약.
-        workspaces[].local_path는 worker-local — HQ는 workspace_ref만 알고 로컬 경로엔 의존 안 함."""
+        """NAT worker 등록. 서버가 canonical worker_id + worker_token을 발급하면 저장하고
+        이후 호출 헤더를 worker_token으로 교체한다(team JWT는 register에만 사용)."""
         async def _call():
             r = await self._http.post("/api/workers", json={
-                "worker_id": self.agent_id,
+                "worker_id": self.agent_id,            # hint(서버가 무시하고 canonical 생성)
                 "capabilities": capabilities,
                 "workspaces": workspaces or [],
             })
             r.raise_for_status()
             return r.json()
-        return await self._retry(_call)
+        data = await self._retry(_call)
+        self._worker_id = data.get("worker_id") or self.agent_id
+        token = data.get("worker_token")
+        if token:
+            self._worker_token = token
+            self._http.headers["Authorization"] = f"Bearer {token}"
+        return data
+
+    def _wid(self) -> str:
+        return self._worker_id or self.agent_id
 
     async def worker_heartbeat(self) -> dict:
         async def _call():
-            r = await self._http.post(f"/api/workers/{self.agent_id}/heartbeat")
+            r = await self._http.post(f"/api/workers/{self._wid()}/heartbeat")
             r.raise_for_status()
             return r.json()
         return await self._retry(_call)
@@ -148,12 +160,14 @@ class AgentClient:
         """NAT command queue에서 실행 command를 pull한다. 없으면 None."""
         async def _call():
             r = await self._http.post(
-                f"/api/workers/{self.agent_id}/commands/poll",
+                f"/api/workers/{self._wid()}/commands/poll",
                 json={"capabilities": capabilities},
                 timeout=45.0,
             )
             r.raise_for_status()
-            return r.json().get("command")
+            payload = r.json()
+            self._lease_id = payload.get("lease_id")
+            return payload.get("command")
         return await self._retry(_call)
 
     async def submit_worker_result(self, command_id: str, result: dict, artifacts: dict | None = None) -> dict:
@@ -161,7 +175,7 @@ class AgentClient:
         artifacts = artifacts or result.get("artifacts") or {}
         async def _call():
             r = await self._http.post(
-                f"/api/workers/{self.agent_id}/commands/{command_id}/result",
+                f"/api/workers/{self._wid()}/commands/{command_id}/result",
                 json={
                     "status": result.get("status", "failed"),
                     "summary": result.get("summary", ""),
@@ -170,6 +184,7 @@ class AgentClient:
                     "pr_url": artifacts.get("pr_url"),
                     "key_decisions": artifacts.get("key_decisions") or [],
                     "runner": artifacts.get("runner"),
+                    "lease_id": self._lease_id,
                 },
             )
             r.raise_for_status()
