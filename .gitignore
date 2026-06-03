@@ -1,0 +1,74 @@
+# 환경변수 (절대 커밋 금지)
+.env
+.env.local
+.env.*.local
+
+# DB
+api/dipeen.db
+*.db
+
+# NAT 런타임 저장소(event-sourced JSONL/artifacts — 커밋 금지)
+nat-workspace/
+**/nat-workspace/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Docker volumes
+data/
+
+# Logs & runtime artifacts
+uvicorn.log
+*.log
+nat-workspace/
+dipeen-workspace/
+dipeen-shared/
+web/test-results/
+.dipeen-audit.mjs
+_hermes_demo.py
+DIPEEN_AGENTS.md
+api/DIPEEN_AGENTS.md
+
+# Zip archives (reference source tarballs)
+*.zip
+
+# Session / build tracking dirs
+building_Tracking/
+web/pub/
+.superpowers/
+.dipeen/
+docs/claude/asset-requests/queue.jsonl
+docs/claude/asset-requests/active/
+docs/claude/asset-requests/done/
+docs/claude/asset-requests/failed/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code 개인 설정 (커밋 금지)
+.claude/
+
+# 참조 전용 소스 (커밋 불필요)
+claw-code-main/
+deskrpg-master/
+oh-my-openagent-dev/
+oh-my-opencode-3.8.3/
+hermes-agent/
+not-claude-code-emulator-master/
+
+# test/runtime artifacts (Claude sandbox)
+_sandbox/
+output/

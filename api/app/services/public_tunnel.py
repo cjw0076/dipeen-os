@@ -1,0 +1,87 @@
+"""공개 도달성 — Cloudflare quick tunnel로 로컬 HQ를 공개 HTTPS/WSS로 노출.
+
+VPS 없이 노드/관객 폰이 HQ에 닿게 한다(다중 디바이스 데모의 도달성 층). cloudflared가 outbound로
+CF에 붙어 NAT·인바운드 포트 0, 자동 TLS, *계정 불요*(quick tunnel). dipeen-up/온보딩이 호출.
+
+- quick tunnel: 지금 즉시, 무계정 → 랜덤 `*.trycloudflare.com` (데모용).
+- named tunnel(고정 도메인): Cloudflare API/MCP + 도메인 필요 → 후속(production).
+"""
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import subprocess
+import time
+from pathlib import Path
+
+_URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
+
+
+def find_cloudflared() -> str | None:
+    """PATH → winget Links → winget Packages 순으로 cloudflared 탐색."""
+    exe = shutil.which("cloudflared")
+    if exe:
+        return exe
+    local = Path(os.environ.get("LOCALAPPDATA", ""))
+    link = local / "Microsoft" / "WinGet" / "Links" / "cloudflared.exe"
+    if link.exists():
+        return str(link)
+    pkgs = local / "Microsoft" / "WinGet" / "Packages"
+    if pkgs.exists():
+        for p in pkgs.glob("Cloudflare.cloudflared_*/cloudflared.exe"):
+            return str(p)
+    return None
+
+
+def install_hint() -> str:
+    return "cloudflared 미설치 — `winget install Cloudflare.cloudflared` (또는 `npm i -g cloudflared`)"
+
+
+def wss_url(https_url: str, path: str = "/ws/hermes/agent") -> str:
+    """공개 https URL → 노드가 붙을 wss URL."""
+    return https_url.replace("https://", "wss://", 1).rstrip("/") + path
+
+
+def start_quick_tunnel(port: int = 8000, timeout: float = 30.0):
+    """cloudflared quick tunnel 시작 → (proc, public_https_url).
+
+    종료: proc.terminate(). cloudflared가 종단점을 출력할 때까지(최대 timeout) 대기.
+    """
+    exe = find_cloudflared()
+    if not exe:
+        raise RuntimeError(install_hint())
+    proc = subprocess.Popen(
+        [exe, "tunnel", "--url", f"http://127.0.0.1:{port}"],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+    )
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        line = proc.stdout.readline() if proc.stdout else ""
+        if not line:
+            if proc.poll() is not None:
+                raise RuntimeError("cloudflared가 종료됨 — 터널 실패")
+            continue
+        m = _URL_RE.search(line)
+        if m:
+            return proc, m.group(0)
+    proc.terminate()
+    raise RuntimeError("터널 URL을 시간 내 받지 못함")
+
+
+if __name__ == "__main__":  # `cd api && python -m app.services.public_tunnel`
+    _port = int(os.environ.get("DIPEEN_HQ_PORT", "8000"))
+    print(f"[tunnel] HQ(:{_port})를 공개로 노출하는 중… (cloudflared)")
+    try:
+        _proc, _url = start_quick_tunnel(_port)
+    except RuntimeError as e:
+        print(f"[tunnel] 실패: {e}")
+        raise SystemExit(1)
+    print(f"[tunnel] 공개 API : {_url}")
+    print(f"[tunnel] 노드 WSS : {wss_url(_url)}")
+    print(f"[tunnel] 노드 합류 : dipeen-agent connect --code <CODE> --api-url {_url}")
+    print("[tunnel] (Ctrl+C로 종료)")
+    try:
+        _proc.wait()
+    except KeyboardInterrupt:
+        _proc.terminate()

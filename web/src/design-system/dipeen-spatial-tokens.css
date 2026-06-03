@@ -1,0 +1,131 @@
+:root,
+[data-dipeen-theme="light"] {
+  --ds-bg: #fbf4e8;
+  --ds-bg-muted: #f4e8d5;
+  --ds-surface: #fffdf8;
+  --ds-surface-raised: #ffffff;
+  --ds-surface-warm: #fff6e7;
+  --ds-shell: #13233a;
+  --ds-shell-muted: #1e3350;
+  --ds-text: #1f2a37;
+  --ds-text-muted: #637083;
+  --ds-text-subtle: #8a94a5;
+  --ds-border: #e4d7c2;
+  --ds-border-strong: #cdba9d;
+  --ds-primary: #3e63dd;
+  --ds-primary-soft: #e9edff;
+  --ds-primary-warm: #5b56e8;
+  --ds-violet: #7b5ce1;
+  --ds-sage: #4c9a74;
+  --ds-sage-soft: #e7f5ee;
+  --ds-honey: #d99a18;
+  --ds-honey-soft: #fff2cc;
+  --ds-coral: #d85e4f;
+  --ds-coral-soft: #ffe7e2;
+  --ds-focus: #5975ff;
+  --ds-bg-image: url("/assets/dipeen-spatial/backgrounds/office-ivory-light.png");
+  --ds-shadow-card: 0 1px 2px rgba(36, 32, 25, 0.08), 0 10px 24px rgba(68, 56, 38, 0.1);
+  --ds-shadow-raised: 0 2px 6px rgba(36, 32, 25, 0.1), 0 18px 44px rgba(68, 56, 38, 0.14);
+  --ds-shadow-floating: 0 8px 20px rgba(31, 42, 55, 0.12), 0 28px 72px rgba(31, 42, 55, 0.18);
+}
+
+[data-dipeen-theme="dark"] {
+  --ds-bg: #101725;
+  --ds-bg-muted: #151e2f;
+  --ds-surface: #182232;
+  --ds-surface-raised: #1f2a3b;
+  --ds-surface-warm: #251f19;
+  --ds-shell: #09111f;
+  --ds-shell-muted: #121c2e;
+  --ds-text: #f5f0e7;
+  --ds-text-muted: #bac2d0;
+  --ds-text-subtle: #8994a8;
+  --ds-border: #2d3a4d;
+  --ds-border-strong: #45546a;
+  --ds-primary: #6d83ff;
+  --ds-primary-soft: #202a5f;
+  --ds-primary-warm: #8e7bff;
+  --ds-violet: #a18bff;
+  --ds-sage: #5ec58f;
+  --ds-sage-soft: #173929;
+  --ds-honey: #f2b94b;
+  --ds-honey-soft: #3d2d10;
+  --ds-coral: #ff8070;
+  --ds-coral-soft: #43211f;
+  --ds-focus: #8fa1ff;
+  --ds-bg-image: url("/assets/dipeen-spatial/backgrounds/office-warm-dark.png");
+  --ds-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.26), 0 12px 32px rgba(0, 0, 0, 0.28);
+  --ds-shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.32), 0 22px 52px rgba(0, 0, 0, 0.34);
+  --ds-shadow-floating: 0 10px 28px rgba(0, 0, 0, 0.36), 0 34px 82px rgba(0, 0, 0, 0.42);
+}
+
+[data-dipeen-locale="ko"] {
+  font-family: Inter, Geist, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+
+.ds-page {
+  min-height: 100vh;
+  background: var(--ds-bg);
+  color: var(--ds-text);
+}
+
+.ds-office-surface {
+  background-image: linear-gradient(180deg, rgba(255, 253, 248, 0.72), rgba(255, 253, 248, 0.92)), var(--ds-bg-image);
+  background-position: center;
+  background-size: cover;
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  box-shadow: var(--ds-shadow-raised);
+}
+
+[data-dipeen-theme="dark"] .ds-office-surface {
+  background-image: linear-gradient(180deg, rgba(16, 23, 37, 0.32), rgba(16, 23, 37, 0.82)), var(--ds-bg-image);
+}
+
+.ds-panel,
+.ds-card,
+.ds-nudge,
+.ds-agent-card {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: 8px;
+  box-shadow: var(--ds-shadow-card);
+  color: var(--ds-text);
+}
+
+.ds-panel {
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.ds-card,
+.ds-agent-card {
+  padding: 16px;
+}
+
+.ds-nudge {
+  border-color: color-mix(in srgb, var(--ds-honey) 38%, var(--ds-border));
+  background: linear-gradient(180deg, var(--ds-surface-raised), var(--ds-surface-warm));
+  box-shadow: var(--ds-shadow-floating);
+  padding: 16px;
+}
+
+.ds-status-healthy {
+  color: var(--ds-sage);
+  background: var(--ds-sage-soft);
+}
+
+.ds-status-waiting {
+  color: var(--ds-honey);
+  background: var(--ds-honey-soft);
+}
+
+.ds-status-blocked {
+  color: var(--ds-coral);
+  background: var(--ds-coral-soft);
+}
+
+.ds-focus-ring:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ds-focus) 38%, transparent);
+  outline-offset: 2px;
+}

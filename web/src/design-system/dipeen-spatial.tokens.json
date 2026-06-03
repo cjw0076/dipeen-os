@@ -1,0 +1,150 @@
+{
+  "name": "Dipeen Spatial Friendly",
+  "version": "0.1.0",
+  "description": "Reusable warm ivory / friendly spatial design tokens for Dipeen team-based agent native UI.",
+  "locales": {
+    "en": {
+      "label": "English",
+      "fontFamily": "Inter, Geist, Arial, sans-serif"
+    },
+    "ko": {
+      "label": "Korean",
+      "fontFamily": "Inter, Geist, Noto Sans KR, Apple SD Gothic Neo, Malgun Gothic, sans-serif"
+    }
+  },
+  "assets": {
+    "backgroundLight": "/assets/dipeen-spatial/backgrounds/office-ivory-light.png",
+    "backgroundDark": "/assets/dipeen-spatial/backgrounds/office-warm-dark.png",
+    "floorMap": "/assets/dipeen-spatial/backgrounds/office-floor-map.png",
+    "officeScene3d": "/assets/dipeen-spatial/3d/dipeen-office-scene.glb",
+    "agentPortraits": {
+      "human": "/assets/agents/human-manager.png",
+      "pm": "/assets/agents/pm-agent.png",
+      "fe": "/assets/agents/fe-agent.png",
+      "be": "/assets/agents/be-agent.png",
+      "qa": "/assets/agents/qa-agent.png"
+    }
+  },
+  "modes": {
+    "light": {
+      "color": {
+        "canvas": "#FBF4E8",
+        "canvasMuted": "#F4E8D5",
+        "surface": "#FFFDF8",
+        "surfaceRaised": "#FFFFFF",
+        "surfaceWarm": "#FFF6E7",
+        "shell": "#13233A",
+        "shellMuted": "#1E3350",
+        "text": "#1F2A37",
+        "textMuted": "#637083",
+        "textSubtle": "#8A94A5",
+        "border": "#E4D7C2",
+        "borderStrong": "#CDBA9D",
+        "primary": "#3E63DD",
+        "primarySoft": "#E9EDFF",
+        "primaryWarm": "#5B56E8",
+        "violet": "#7B5CE1",
+        "sage": "#4C9A74",
+        "sageSoft": "#E7F5EE",
+        "honey": "#D99A18",
+        "honeySoft": "#FFF2CC",
+        "coral": "#D85E4F",
+        "coralSoft": "#FFE7E2",
+        "focus": "#5975FF"
+      },
+      "elevation": {
+        "none": "none",
+        "card": "0 1px 2px rgba(36, 32, 25, 0.08), 0 10px 24px rgba(68, 56, 38, 0.10)",
+        "raised": "0 2px 6px rgba(36, 32, 25, 0.10), 0 18px 44px rgba(68, 56, 38, 0.14)",
+        "floating": "0 8px 20px rgba(31, 42, 55, 0.12), 0 28px 72px rgba(31, 42, 55, 0.18)"
+      }
+    },
+    "dark": {
+      "color": {
+        "canvas": "#101725",
+        "canvasMuted": "#151E2F",
+        "surface": "#182232",
+        "surfaceRaised": "#1F2A3B",
+        "surfaceWarm": "#251F19",
+        "shell": "#09111F",
+        "shellMuted": "#121C2E",
+        "text": "#F5F0E7",
+        "textMuted": "#BAC2D0",
+        "textSubtle": "#8994A8",
+        "border": "#2D3A4D",
+        "borderStrong": "#45546A",
+        "primary": "#6D83FF",
+        "primarySoft": "#202A5F",
+        "primaryWarm": "#8E7BFF",
+        "violet": "#A18BFF",
+        "sage": "#5EC58F",
+        "sageSoft": "#173929",
+        "honey": "#F2B94B",
+        "honeySoft": "#3D2D10",
+        "coral": "#FF8070",
+        "coralSoft": "#43211F",
+        "focus": "#8FA1FF"
+      },
+      "elevation": {
+        "none": "none",
+        "card": "0 1px 2px rgba(0, 0, 0, 0.26), 0 12px 32px rgba(0, 0, 0, 0.28)",
+        "raised": "0 2px 8px rgba(0, 0, 0, 0.32), 0 22px 52px rgba(0, 0, 0, 0.34)",
+        "floating": "0 10px 28px rgba(0, 0, 0, 0.36), 0 34px 82px rgba(0, 0, 0, 0.42)"
+      }
+    }
+  },
+  "role": {
+    "human": "#2F7DE1",
+    "pm": "#F2B705",
+    "fe": "#3F72FF",
+    "be": "#43B779",
+    "qa": "#8A66FF",
+    "system": "#748094"
+  },
+  "radius": {
+    "control": "6px",
+    "card": "8px",
+    "panel": "10px",
+    "sheet": "12px",
+    "pill": "999px"
+  },
+  "spacing": {
+    "0": "0px",
+    "1": "4px",
+    "2": "8px",
+    "3": "12px",
+    "4": "16px",
+    "5": "20px",
+    "6": "24px",
+    "8": "32px",
+    "10": "40px",
+    "12": "48px"
+  },
+  "typography": {
+    "display": {
+      "fontSize": "32px",
+      "lineHeight": "40px",
+      "fontWeight": "700"
+    },
+    "title": {
+      "fontSize": "20px",
+      "lineHeight": "28px",
+      "fontWeight": "700"
+    },
+    "section": {
+      "fontSize": "15px",
+      "lineHeight": "22px",
+      "fontWeight": "700"
+    },
+    "body": {
+      "fontSize": "14px",
+      "lineHeight": "22px",
+      "fontWeight": "500"
+    },
+    "caption": {
+      "fontSize": "12px",
+      "lineHeight": "18px",
+      "fontWeight": "500"
+    }
+  }
+}
