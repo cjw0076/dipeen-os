@@ -41,13 +41,14 @@ async def test_meeting_to_routed_command_one_cycle(client, tmp_path, monkeypatch
                                                   "workspace_ref": "workspace://ezmap-web"}})).json()
     assert pv0["deliverable"] is False                    # 받을 worker 없음
 
-    # 5) 민준 PC worker 등록(role/repo caps + workspace) — HQ는 local_path 모름
-    await client.post("/api/workers", json={
+    # 5) 민준 PC worker 등록(role/repo caps + workspace) — HQ는 local_path 모름. 서버가 canonical id 발급.
+    reg_minjun = (await client.post("/api/workers", json={
         "worker_id": "worker.minjun-mac",
         "capabilities": ["provider.claude", "role.frontend", "user.minjun", "repo.ezmap-web", "workspace.write"],
         "workspaces": [{"workspace_ref": "workspace://ezmap-web", "repo": "repo.ezmap-web",
                         "local_path": "/Users/minjun/projects/ezmap-web",
-                        "capabilities": ["repo.ezmap-web", "workspace.write"]}]})
+                        "capabilities": ["repo.ezmap-web", "workspace.write"]}]})).json()
+    minjun_wid = reg_minjun["worker_id"]
     pv1 = (await client.post("/api/routing/preview",
                              json={"assignment": {"role": "frontend", "repo": "ezmap-web",
                                                   "workspace_ref": "workspace://ezmap-web"}})).json()
@@ -62,12 +63,13 @@ async def test_meeting_to_routed_command_one_cycle(client, tmp_path, monkeypatch
     assert not command["workspace_root"]                  # HQ는 절대 로컬 경로를 안 싣는다
 
     # 7) worker poll — *맞는 worker만* lease(라우팅). 다른 역할 worker는 못 가져감.
-    await client.post("/api/workers", json={"worker_id": "worker.bob-qa",
-                                            "capabilities": ["provider.claude", "role.qa", "workspace.write"]})
-    none = (await client.post("/api/workers/worker.bob-qa/commands/poll",
+    reg_bob = (await client.post("/api/workers", json={"worker_id": "worker.bob-qa",
+                                            "capabilities": ["provider.claude", "role.qa", "workspace.write"]})).json()
+    bob_wid = reg_bob["worker_id"]
+    none = (await client.post(f"/api/workers/{bob_wid}/commands/poll",
                               json={"capabilities": ["provider.claude", "role.qa", "workspace.write"]})).json()
     assert none["command"] is None                        # QA worker는 FE 작업 못 가져감
-    leased = (await client.post("/api/workers/worker.minjun-mac/commands/poll",
+    leased = (await client.post(f"/api/workers/{minjun_wid}/commands/poll",
                                 json={"capabilities": ["provider.claude", "role.frontend", "user.minjun",
                                                        "repo.ezmap-web", "workspace.write"]})).json()
     assert leased["command"]["command_id"] == command["command_id"]

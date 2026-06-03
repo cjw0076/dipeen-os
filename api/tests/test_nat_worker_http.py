@@ -53,7 +53,7 @@ async def test_http_worker_register_poll_execute_reconcile(client, tmp_path, mon
     w = WorkerHttpClient("w-remote", ["provider.claude", "workspace.write"], http=client,
                          runner=_FakeRunner(ExecResult(0, "implemented", ""), writes="page.tsx"))
     reg = await w.register()
-    assert reg["worker_id"] == "w-remote"
+    assert reg["worker_id"].startswith("wkr_")        # 서버 canonical id(클라 hint 무시)
 
     ran = await w.poll_once()                                      # poll→ack→로컬실행→result POST
     assert ran is True

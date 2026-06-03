@@ -64,14 +64,15 @@ async def test_worker_http_poll_and_result_ingests_run_artifacts_and_memory(clie
         "capabilities": ["provider.claude", "workspace.write"],
     })
     assert registered.status_code == 200
+    wid = registered.json()["worker_id"]            # 서버 canonical id
 
-    polled = await client.post("/api/workers/w-alice-pc/commands/poll", json={})
+    polled = await client.post(f"/api/workers/{wid}/commands/poll", json={})
     assert polled.status_code == 200
     leased = polled.json()["command"]
     assert leased["command_id"] == command["command_id"]
     assert leased["state"] == "leased"
 
-    result = await client.post(f"/api/workers/w-alice-pc/commands/{command['command_id']}/result", json={
+    result = await client.post(f"/api/workers/{wid}/commands/{command['command_id']}/result", json={
         "status": "done",
         "summary": "Worker completed the product alpha path.",
         "changed_files": ["web/src/components/control-plane/ControlTower.tsx"],

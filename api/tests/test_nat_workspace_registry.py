@@ -88,6 +88,6 @@ async def test_workspace_ref_survives_http_worker_roundtrip(client, tmp_path, mo
                          http=client, workspaces=[_ws()])
     await w.register()
     workers = (await client.get("/api/workers")).json()
-    me = next(x for x in workers if x["worker_id"] == "worker.minjun-mac")
+    me = next(x for x in workers if x["worker_id"] == w.worker_id)   # 서버 canonical id
     assert me["workspaces"][0]["workspace_ref"] == "workspace://ezmap-web"
     assert me["workspaces"][0]["local_path"] == "/Users/minjun/projects/ezmap-web"

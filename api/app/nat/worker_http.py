@@ -36,13 +36,25 @@ class WorkerHttpClient:
         self.executor_mode: ExecutorMode = executor_mode or default_executor_mode()
         self.executors: dict[str, ExecutorPlugin] = executors or {}
         self.workspaces: list[WorkerWorkspace] = workspaces or []   # workspace_ref → 내 local_path
+        self.worker_token: Optional[str] = None      # register가 받은 worker-scoped JWT
+        self._lease_id: Optional[str] = None          # 최근 poll lease (result에 전달)
 
     async def register(self) -> dict:
         r = await self.http.post("/api/workers",
                                  json={"worker_id": self.worker_id, "capabilities": self.capabilities,
                                        "workspaces": [w.model_dump(mode="json") for w in self.workspaces]})
         r.raise_for_status()
-        return r.json()
+        data = r.json()
+        # 서버가 canonical worker_id + worker_token 발급 → 이후 path/auth에 사용
+        self.worker_id = data.get("worker_id") or self.worker_id
+        token = data.get("worker_token")
+        if token:
+            self.worker_token = token
+            try:
+                self.http.headers["Authorization"] = f"Bearer {token}"
+            except Exception:  # noqa: BLE001 — 주입 client가 headers 미지원이어도 무해
+                pass
+        return data
 
     async def heartbeat(self) -> None:
         await self.http.post(f"/api/workers/{self.worker_id}/heartbeat")
@@ -52,9 +64,11 @@ class WorkerHttpClient:
         r = await self.http.post(f"/api/workers/{self.worker_id}/commands/poll",
                                  json={"capabilities": self.capabilities})
         r.raise_for_status()
-        data = r.json().get("command")
+        payload = r.json()
+        data = payload.get("command")
         if not data:
             return False
+        self._lease_id = payload.get("lease_id")
         cmd = Command.model_validate(data)
         await self.http.post(f"/api/workers/{self.worker_id}/commands/{cmd.command_id}/ack")
         if cmd.command_type == "provider.probe":          # read-only 진단(M11b) — run 아님
@@ -71,7 +85,8 @@ class WorkerHttpClient:
             return True
         await self.http.post(
             f"/api/workers/{self.worker_id}/commands/{cmd.command_id}/result",
-            json={"status": status, "summary": summary, "changed_files": changed, "runner": cmd.provider})
+            json={"status": status, "summary": summary, "changed_files": changed, "runner": cmd.provider,
+                  "lease_id": self._lease_id})
         return True
 
     async def _execute_permission(self, cmd: Command) -> bool:
