@@ -6,6 +6,7 @@ artifacts, permissions, memory candidates, and aggregate state.
 """
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
@@ -18,7 +19,7 @@ from app.db.models import Agent, DecisionCard, Task
 from app.nat.contracts import Message, MessageLink, Room, SenderRef
 from app.nat.executors import default_executor_mode
 from app.db.session import get_db
-from app.routers.auth import get_team_id
+from app.routers.auth import get_team_id, get_worker_identity, WorkerIdentity, _issue_worker_jwt
 from app.routers.events import broadcast
 from app.services import control_plane
 
@@ -355,10 +356,12 @@ async def list_workers():
 
 
 @router.post("/workers")
-async def register_worker(body: WorkerRegisterBody):
-    worker = control_plane.register_worker(body.worker_id, body.capabilities, workspaces=body.workspaces)
+async def register_worker(body: WorkerRegisterBody, team_id: str = Depends(get_team_id)):
+    canonical_id = "wkr_" + uuid.uuid4().hex[:12]   # 서버 권위 생성 — 클라 self-report 무시
+    worker = control_plane.register_worker(canonical_id, body.capabilities, workspaces=body.workspaces)
+    worker_token = _issue_worker_jwt(team_id, canonical_id)
     await broadcast({"type": "worker.updated", "worker_id": worker.worker_id, "state": worker.state})
-    return worker
+    return {"worker": worker, "worker_id": canonical_id, "worker_token": worker_token}
 
 
 @router.post("/workers/{worker_id}/heartbeat")
