@@ -14,6 +14,8 @@ import os as _os
 import re
 import secrets
 import time
+import uuid
+from dataclasses import dataclass
 from typing import Annotated
 
 import jwt
@@ -79,6 +81,20 @@ def _issue_team_jwt(team_id: str, role: str = "member", display_name: str = "") 
         "source": "dipeen",
         "iat": now,
         "exp": now + 86400 * 30,
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm="HS256")
+
+
+def _issue_worker_jwt(team_id: str, worker_id: str) -> str:
+    """worker-scoped JWT — worker endpoint 인증용. typ=worker로 team/user JWT와 구분."""
+    now = int(time.time())
+    payload = {
+        "typ": "worker",
+        "team_id": team_id,
+        "worker_id": worker_id,
+        "iat": now,
+        "exp": now + 86400 * 30,
+        "jti": uuid.uuid4().hex,
     }
     return jwt.encode(payload, settings.secret_key, algorithm="HS256")
 
@@ -254,6 +270,34 @@ def get_team_id(authorization: Annotated[str | None, Header()] = None) -> str:
         if _REQUIRE_AUTH:
             raise HTTPException(401, "Invalid token")
         return "default-team"
+
+
+@dataclass
+class WorkerIdentity:
+    team_id: str
+    worker_id: str
+
+
+def get_worker_identity(
+    worker_id: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> WorkerIdentity:
+    """worker endpoint 인증. typ=worker + path worker_id 일치 검증.
+    REQUIRE_AUTH=false면 토큰 없을 때 폴백(legacy). 토큰이 제시되면 항상 검증한다."""
+    if not authorization or not authorization.startswith("Bearer "):
+        if _REQUIRE_AUTH:
+            raise HTTPException(401, "Worker authentication required")
+        return WorkerIdentity(team_id="default-team", worker_id=worker_id)
+    token = authorization.removeprefix("Bearer ")
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "Invalid worker token")
+    if payload.get("typ") != "worker":
+        raise HTTPException(403, "Not a worker token")
+    if payload.get("worker_id") != worker_id:
+        raise HTTPException(403, "Worker id mismatch")
+    return WorkerIdentity(team_id=payload.get("team_id", "default-team"), worker_id=worker_id)
 
 
 def get_role(authorization: Annotated[str | None, Header()] = None) -> str | None:
