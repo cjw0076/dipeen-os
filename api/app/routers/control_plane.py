@@ -107,6 +107,7 @@ class WorkerResultBody(BaseModel):
     pr_url: str | None = None
     key_decisions: list[str] = Field(default_factory=list)
     runner: str | None = None
+    lease_id: str | None = None        # poll에서 받은 lease 식별자(stale/위조 거부)
 
 
 class PermissionResultBody(BaseModel):
@@ -365,7 +366,7 @@ async def register_worker(body: WorkerRegisterBody, team_id: str = Depends(get_t
 
 
 @router.post("/workers/{worker_id}/heartbeat")
-async def heartbeat_worker(worker_id: str):
+async def heartbeat_worker(worker_id: str, identity: WorkerIdentity = Depends(get_worker_identity)):
     worker = control_plane.heartbeat_worker(worker_id)
     if not worker:
         raise HTTPException(404, f"Worker {worker_id} not found")
@@ -379,7 +380,8 @@ async def list_commands(state: str | None = Query(None)):
 
 
 @router.post("/workers/{worker_id}/commands/poll")
-async def poll_worker_command(worker_id: str, body: WorkerPollBody):
+async def poll_worker_command(worker_id: str, body: WorkerPollBody,
+                              identity: WorkerIdentity = Depends(get_worker_identity)):
     worker = control_plane.heartbeat_worker(worker_id)
     if not worker:
         raise HTTPException(404, f"Worker {worker_id} not found")
@@ -393,11 +395,12 @@ async def poll_worker_command(worker_id: str, body: WorkerPollBody):
         "task_id": command.task_id,
         "run_id": command.run_id,
     })
-    return {"command": command}
+    return {"command": command, "lease_id": command.lease_id}
 
 
 @router.post("/workers/{worker_id}/commands/{command_id}/ack")
-async def ack_worker_command(worker_id: str, command_id: str):
+async def ack_worker_command(worker_id: str, command_id: str,
+                             identity: WorkerIdentity = Depends(get_worker_identity)):
     command = control_plane.ack_worker_command(worker_id, command_id)
     if not command:
         raise HTTPException(404, f"Command {command_id} not found")
@@ -406,7 +409,8 @@ async def ack_worker_command(worker_id: str, command_id: str):
 
 
 @router.post("/workers/{worker_id}/commands/{command_id}/complete")
-async def complete_worker_command(worker_id: str, command_id: str):
+async def complete_worker_command(worker_id: str, command_id: str,
+                                  identity: WorkerIdentity = Depends(get_worker_identity)):
     command = control_plane.complete_worker_command(worker_id, command_id)
     if not command:
         raise HTTPException(404, f"Command {command_id} not found or not leased by {worker_id}")
@@ -415,7 +419,8 @@ async def complete_worker_command(worker_id: str, command_id: str):
 
 
 @router.post("/workers/{worker_id}/commands/{command_id}/fail")
-async def fail_worker_command(worker_id: str, command_id: str):
+async def fail_worker_command(worker_id: str, command_id: str,
+                              identity: WorkerIdentity = Depends(get_worker_identity)):
     command = control_plane.fail_worker_command(worker_id, command_id)
     if not command:
         raise HTTPException(404, f"Command {command_id} not found or not leased by {worker_id}")
@@ -424,7 +429,11 @@ async def fail_worker_command(worker_id: str, command_id: str):
 
 
 @router.post("/workers/{worker_id}/commands/{command_id}/result")
-async def ingest_worker_result(worker_id: str, command_id: str, body: WorkerResultBody):
+async def ingest_worker_result(worker_id: str, command_id: str, body: WorkerResultBody,
+                               identity: WorkerIdentity = Depends(get_worker_identity)):
+    existing = control_plane.get_command(command_id)
+    if existing is not None and existing.lease_id and body.lease_id and existing.lease_id != body.lease_id:
+        raise HTTPException(409, "Stale lease — command was re-leased")
     payload = control_plane.ingest_worker_command_result(
         worker_id=worker_id,
         command_id=command_id,
@@ -458,7 +467,8 @@ async def ingest_worker_result(worker_id: str, command_id: str, body: WorkerResu
 
 
 @router.post("/workers/{worker_id}/commands/{command_id}/permission-result")
-async def ingest_worker_permission_result(worker_id: str, command_id: str, body: PermissionResultBody):
+async def ingest_worker_permission_result(worker_id: str, command_id: str, body: PermissionResultBody,
+                                          identity: WorkerIdentity = Depends(get_worker_identity)):
     """승인된 permission.execute를 worker가 처리해 올린 receipt를 영속·reconcile. Core는 실행 안 함."""
     payload = control_plane.ingest_permission_result(
         worker_id=worker_id,
@@ -491,7 +501,8 @@ async def ingest_worker_permission_result(worker_id: str, command_id: str, body:
 
 
 @router.post("/workers/{worker_id}/commands/{command_id}/probe-result")
-async def ingest_worker_probe_result(worker_id: str, command_id: str, body: ProbeResultBody):
+async def ingest_worker_probe_result(worker_id: str, command_id: str, body: ProbeResultBody,
+                                     identity: WorkerIdentity = Depends(get_worker_identity)):
     """worker가 provider read-only probe(doctor/status)를 실행해 올린 결과를 task-less Event로 수집. Core 실행 0."""
     payload = control_plane.ingest_probe_result(
         worker_id=worker_id, command_id=command_id,

@@ -303,6 +303,10 @@ def list_commands(*, state: str | None = None) -> list[Command]:
     return sorted(items, key=lambda c: c.created_at, reverse=True)
 
 
+def get_command(command_id: str) -> Command | None:
+    return _command_queue().get(command_id)
+
+
 def poll_worker_command(worker_id: str, capabilities: list[str]) -> Command | None:
     _worker_registry().heartbeat(worker_id)
     return _command_queue().poll(worker_id, capabilities)

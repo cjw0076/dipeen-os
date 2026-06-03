@@ -95,3 +95,23 @@ def test_register_issues_worker_token_and_canonical_id(monkeypatch):
     assert data["worker_token"]
     decoded = a._decode_jwt(data["worker_token"])
     assert decoded["typ"] == "worker" and decoded["team_id"] == "teamA"
+
+
+def test_worker_endpoint_requires_worker_token(monkeypatch):
+    c, a = _client(monkeypatch, True)
+    r = c.post("/api/workers/wkr_x/heartbeat")
+    assert r.status_code == 401
+
+
+def test_worker_endpoint_rejects_foreign_worker_token(monkeypatch):
+    c, a = _client(monkeypatch, True)
+    tok = a._issue_worker_jwt("teamA", "wkr_REAL")
+    r = c.post("/api/workers/wkr_OTHER/heartbeat", headers={"Authorization": f"Bearer {tok}"})
+    assert r.status_code == 403
+
+
+def test_worker_endpoints_pass_when_auth_off(monkeypatch):
+    c, a = _client(monkeypatch, False)
+    # legacy: 토큰 없어도 401 아님(worker 부재로 404 가능하나 인증 차단은 아님)
+    r = c.post("/api/workers/wkr_x/heartbeat")
+    assert r.status_code != 401
