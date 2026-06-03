@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import time
+import urllib.parse
 from pathlib import Path
 
 _URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
@@ -69,19 +70,46 @@ def start_quick_tunnel(port: int = 8000, timeout: float = 30.0):
     raise RuntimeError("터널 URL을 시간 내 받지 못함")
 
 
-if __name__ == "__main__":  # `cd api && python -m app.services.public_tunnel`
-    _port = int(os.environ.get("DIPEEN_HQ_PORT", "8000"))
-    print(f"[tunnel] HQ(:{_port})를 공개로 노출하는 중… (cloudflared)")
+def build_human_url(web_url: str, api_url: str) -> str:
+    """사람이 열 web URL — web 터널에 ?api=<인코딩된 api 터널>을 붙인다."""
+    return web_url.rstrip("/") + "/?api=" + urllib.parse.quote(api_url, safe="")
+
+
+def start_dual_tunnel(api_port: int = 8000, web_port: int = 3000, timeout: float = 30.0):
+    """API·web 두 quick tunnel 기동 → (api_proc, api_url, web_proc, web_url).
+
+    둘 다 성공해야 반환한다. web 터널이 실패하면 이미 뜬 api 터널을 정리한다(부분 노출 방지).
+    """
+    api_proc, api_url = start_quick_tunnel(api_port, timeout=timeout)
     try:
-        _proc, _url = start_quick_tunnel(_port)
+        web_proc, web_url = start_quick_tunnel(web_port, timeout=timeout)
+    except Exception:
+        api_proc.terminate()
+        raise
+    return api_proc, api_url, web_proc, web_url
+
+
+if __name__ == "__main__":  # `cd api && python -m app.services.public_tunnel`
+    _api_port = int(os.environ.get("DIPEEN_HQ_PORT", "8000"))
+    _web_port = int(os.environ.get("DIPEEN_WEB_PORT", "3000"))
+    print(f"[tunnel] HQ API(:{_api_port}) + web(:{_web_port})를 공개로 노출하는 중… (cloudflared ×2)")
+    try:
+        _api_proc, _api_url, _web_proc, _web_url = start_dual_tunnel(_api_port, _web_port)
     except RuntimeError as e:
         print(f"[tunnel] 실패: {e}")
         raise SystemExit(1)
-    print(f"[tunnel] 공개 API : {_url}")
-    print(f"[tunnel] 노드 WSS : {wss_url(_url)}")
-    print(f"[tunnel] 노드 합류 : dipeen-agent connect --code <CODE> --api-url {_url}")
+    _human = build_human_url(_web_url, _api_url)
+    print(f"[tunnel] 공개 API   : {_api_url}")
+    print(f"[tunnel] 공개 web   : {_web_url}")
+    print(f"[tunnel] 노드 WSS   : {wss_url(_api_url)}")
+    print("[tunnel] ── 사람(관전+운영): 이 URL을 폰/브라우저로 여세요 ──")
+    print(f"[tunnel]   {_human}")
+    print("[tunnel] ── 워커(다른 PC) 합류 ──")
+    print(f"[tunnel]   dipeen-agent connect --code <CODE> --api-url {_api_url}")
+    print("[tunnel] ⚠ quick tunnel은 로컬 HQ를 공개 인터넷에 노출합니다 — 테스트 중에만 켜고 끝나면 Ctrl+C.")
     print("[tunnel] (Ctrl+C로 종료)")
     try:
-        _proc.wait()
+        _api_proc.wait()
     except KeyboardInterrupt:
-        _proc.terminate()
+        _api_proc.terminate()
+        _web_proc.terminate()
