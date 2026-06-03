@@ -323,6 +323,7 @@ class Command(BaseModel):
     state: CommandState = "queued"
     lease_owner: Optional[str] = None              # 점유 worker_id
     lease_expires_at: Optional[datetime] = None
+    lease_id: Optional[str] = None                 # poll마다 새 lease 식별자(stale result 거부용)
     idempotency_key: Optional[str] = None
     permission_id: Optional[str] = None            # permission.execute일 때 PermissionRequest 링크
     payload: dict[str, Any] = Field(default_factory=dict)   # permission.execute: {action,target,branch…}
