@@ -1,18 +1,11 @@
 import { auth } from "./auth";
-
-const DEFAULT_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { getApiBaseUrl } from "./api-base";
 
 function getBase(): string {
-  if (typeof window !== "undefined") {
-    const override = localStorage.getItem("dipeen_api_url");
-    if (override?.trim()) return override.trim();
-  }
-  return DEFAULT_BASE;
+  return getApiBaseUrl();
 }
 
-export function getApiBaseUrl(): string {
-  return getBase();
-}
+export { getApiBaseUrl };
 
 export interface Task {
   id: string;
