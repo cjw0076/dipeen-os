@@ -102,6 +102,9 @@ if __name__ == "__main__":  # `cd api && python -m app.services.public_tunnel`
     print(f"[tunnel] 공개 API   : {_api_url}")
     print(f"[tunnel] 공개 web   : {_web_url}")
     print(f"[tunnel] 노드 WSS   : {wss_url(_api_url)}")
+    if os.environ.get("DIPEEN_REQUIRE_AUTH", "false").lower() != "true":
+        print("[tunnel] ⚠ DIPEEN_REQUIRE_AUTH!=true — worker endpoint 무인증. 공개 노출 시 "
+              "`DIPEEN_REQUIRE_AUTH=true`로 HQ 재기동(임의 클라이언트 worker 위조 방지).")
     print("[tunnel] ── 사람(관전+운영): 이 URL을 폰/브라우저로 여세요 ──")
     print(f"[tunnel]   {_human}")
     print("[tunnel] ── 워커(다른 PC) 합류 ──")
