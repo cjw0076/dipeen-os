@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # CORS — 콤마 구분 Origins ("*" = 모두 허용)
     cors_origins: str = "*"
 
+    # 공개 터널(quick tunnel) origin을 credentials 호환으로 허용할지 — debug와 분리된 명시 플래그
+    enable_public_tunnel_cors: bool = False
+    # 비우면 enable 시 trycloudflare 기본 정규식 사용. 명시하면 그 값 사용.
+    cors_origin_regex: str = ""
+
     # 공유 컨텍스트 디렉토리 (WORKSPACE.md 저장 위치)
     shared_dir: Path = Path(__file__).parent.parent.parent / "dipeen-shared"
 
@@ -49,6 +54,13 @@ class Settings(BaseSettings):
         if self.cors_origins.strip() == "*":
             return ["*"]
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def cors_origin_regex_value(self) -> str | None:
+        """공개 터널 CORS가 켜졌을 때만 정규식 반환. allow_credentials와 호환되는 origin 매칭."""
+        if not self.enable_public_tunnel_cors:
+            return None
+        return self.cors_origin_regex or r"^https://[a-z0-9-]+\.trycloudflare\.com$"
 
     @property
     def is_postgres(self) -> bool:
