@@ -127,15 +127,22 @@ class AgentClient:
             return data
         return await self._retry(_call)
 
-    async def register_worker(self, capabilities: list[str], workspaces: list | None = None) -> dict:
+    async def register_worker(self, capabilities: list[str], workspaces: list | None = None,
+                              probe: dict | None = None) -> dict:
         """NAT worker 등록. 서버가 canonical worker_id + worker_token을 발급하면 저장하고
-        이후 호출 헤더를 worker_token으로 교체한다(team JWT는 register에만 사용)."""
+        이후 호출 헤더를 worker_token으로 교체한다(team JWT는 register에만 사용).
+
+        probe(Keystone C): advertised provider.*의 실제 runnable 여부 — 서버 compute_effective가
+        probed-and-not-runnable인 provider cap을 drop해 silent-failure를 register에서 차단한다."""
         async def _call():
-            r = await self._http.post("/api/workers", json={
+            body = {
                 "worker_id": self.agent_id,            # hint(서버가 무시하고 canonical 생성)
                 "capabilities": capabilities,
                 "workspaces": workspaces or [],
-            })
+            }
+            if probe:
+                body["probe"] = probe
+            r = await self._http.post("/api/workers", json=body)
             r.raise_for_status()
             return r.json()
         data = await self._retry(_call)
@@ -167,6 +174,8 @@ class AgentClient:
             r.raise_for_status()
             payload = r.json()
             self._lease_id = payload.get("lease_id")
+            # diagnostic for a None poll: queued commands we can't take (capability mismatch)
+            self.last_unmatched = payload.get("unmatched") or []
             return payload.get("command")
         return await self._retry(_call)
 

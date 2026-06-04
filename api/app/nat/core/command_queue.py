@@ -52,6 +52,20 @@ class CommandQueue:
                 return self._save(cmd)
         return None
 
+    def unmatched_capabilities(self, capabilities: list[str]) -> list[dict]:
+        """Read-only diagnostic: queued commands this worker CANNOT take because its capabilities
+        don't cover the requirement. Returns {command_id, required, missing} so a None poll can be
+        explained ('your caps miss repo.X') instead of silently skipped."""
+        caps = set(capabilities)
+        out: list[dict] = []
+        for cmd in sorted(self._all(), key=lambda c: c.created_at):
+            if cmd.state == "queued":
+                req = set(cmd.required_capabilities)
+                if not req.issubset(caps):
+                    out.append({"command_id": cmd.command_id, "required": sorted(req),
+                                "missing": sorted(req - caps)})
+        return out
+
     def ack(self, command_id: str, worker_id: str) -> Optional[Command]:
         cmd = self.get(command_id)
         if cmd and cmd.lease_owner == worker_id and cmd.state == "leased":

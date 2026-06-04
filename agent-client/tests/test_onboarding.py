@@ -29,7 +29,7 @@ def test_provisioning_has_install_auth():
         assert m["auth_cmd"]                       # 모든 러너에 auth 안내
     assert p["hermes"]["install_cmd"].startswith("uv tool install")
     assert "codex" in p["omo-codex-light"]["install_cmd"]
-    assert "oh-my-opencode" in p["omo-opencode"]["install_cmd"]
+    assert "oh-my-openagent" in p["omo-opencode"]["install_cmd"]
 
 
 def test_doctor_returns_int():
@@ -95,8 +95,9 @@ def test_bootstrap_plan_cloudflare_worker_layer_contract():
     assert "hermes" in workers
 
     assert plan["byok"]["server_receives_provider_keys"] is False
-    assert any("dipeen-agent connect" in cmd for cmd in plan["commands"]["agent"])
-    assert any("dipeen-agent start" in cmd for cmd in plan["commands"]["agent"])
+    # SSOT: 합류는 단일 `dipeen-agent join` 경로 (connect+start 분리 폐기)
+    assert any("dipeen-agent join" in cmd for cmd in plan["commands"]["agent"])
+    assert not any(cmd.strip() == "dipeen-agent start" for cmd in plan["commands"]["agent"])
 
 
 def test_bootstrap_dry_run_prints_plan_without_env_write(tmp_path, capsys):
@@ -113,5 +114,5 @@ def test_bootstrap_dry_run_prints_plan_without_env_write(tmp_path, capsys):
     assert not env.exists()
     out = capsys.readouterr().out
     assert "cloudflared" in out
-    assert "dipeen-agent connect" in out
+    assert "dipeen-agent join" in out          # SSOT: 단일 합류 경로
     assert "BYOK" in out

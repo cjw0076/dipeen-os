@@ -43,8 +43,7 @@ python -m app.services.public_tunnel
 Workers connect outbound:
 
 ```bash
-dipeen-agent connect --code <CODE> --api-url <PUBLIC_HTTPS_URL>
-dipeen-agent start
+dipeen-agent join <CODE> --api-url <PUBLIC_HTTPS_URL>
 ```
 
 ## Bootstrap Principles

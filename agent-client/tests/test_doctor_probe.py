@@ -60,3 +60,48 @@ def test_probe_runner_nonzero_exit_is_not_runnable():
     assert res["installed"] is True
     assert res["runnable"] is False
     assert res["blocker"] is None                     # bun 차단은 아님 — 일반 실패
+
+
+# ──────────────── Keystone C: auth-aware probe (--version exit 0 ≠ authed) ────────────────
+def test_probe_runner_claude_logged_out_is_not_runnable():
+    """claude --version은 로그아웃 상태에서도 exit 0 → 그것만으론 runnable이면 안 된다.
+    auth 미충족이면 runnable=False, auth=False (Keystone C 핵심 갭)."""
+    res = probe_runner("claude-code", which_fn=lambda b: f"/usr/bin/{b}",
+                       run=_fake_run(0, "2.1.162 (Claude Code)"),
+                       auth_fn=lambda name: False)
+    assert res["installed"] is True
+    assert res["auth"] is False
+    assert res["runnable"] is False                   # --version OK여도 auth 없으면 advertise 금지
+
+
+def test_probe_runner_claude_authed_is_runnable():
+    """auth 충족 + --version OK → runnable=True, auth=True."""
+    res = probe_runner("claude-code", which_fn=lambda b: f"/usr/bin/{b}",
+                       run=_fake_run(0, "2.1.162 (Claude Code)"),
+                       auth_fn=lambda name: True)
+    assert res["installed"] is True
+    assert res["auth"] is True
+    assert res["runnable"] is True
+
+
+def test_probe_runner_codex_logged_out_is_not_runnable():
+    """codex도 동일한 --version 갭 → auth 미충족이면 runnable=False."""
+    res = probe_runner("omo-codex-light", which_fn=lambda b: f"/usr/bin/{b}",
+                       run=_fake_run(0, "codex-cli 0.136.0"),
+                       auth_fn=lambda name: False)
+    assert res["runnable"] is False
+    assert res["auth"] is False
+
+
+def test_default_auth_check_reads_env_key(monkeypatch):
+    """기본 auth 검사: ANTHROPIC_API_KEY가 있으면 claude auth=True."""
+    from dipeen_agent.onboarding import _default_auth_check
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-xxx")
+    assert _default_auth_check("claude-code") is True
+
+
+def test_default_auth_check_non_gated_provider_returns_none():
+    """auth로 게이트하지 않는 provider(omo/hermes)는 None — 기존 probe-exit 의미 유지."""
+    from dipeen_agent.onboarding import _default_auth_check
+    assert _default_auth_check("hermes") is None
+    assert _default_auth_check("omo-opencode") is None

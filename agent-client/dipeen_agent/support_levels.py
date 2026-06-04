@@ -1,44 +1,29 @@
-"""Runner support-level labels used by doctor and harmless probes.
+"""Runner support-level labels shown by onboarding surfaces.
 
-The support taxonomy is intentionally separate from install detection:
-finding a binary on PATH does not mean Dipeen can claim the runner is supported.
+This keeps "binary was found" separate from "Dipeen can safely route work here".
+The policy matches docs/SUPPORT_LEVELS.md: installed/probed/advertised/supported
+are different claims.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
 
 
 @dataclass(frozen=True, slots=True)
 class RunnerSupport:
-    """Human-facing support claim for a provider runner."""
-
     level: str
     note: str
 
 
-_SUPPORTED: Final[RunnerSupport] = RunnerSupport(
-    level="supported",
-    note="CI/e2e/doctor/docs green",
-)
-_PREVIEW: Final[RunnerSupport] = RunnerSupport(
-    level="preview",
-    note="available for explicit testing; advertise only after a healthy probe",
-)
-_UNKNOWN: Final[RunnerSupport] = RunnerSupport(
-    level="unknown",
-    note="not in the public alpha support matrix",
-)
-
-_RUNNER_SUPPORT: Final[dict[str, RunnerSupport]] = {
-    "claude-code": _SUPPORTED,
-    "codex": _SUPPORTED,
-    "omo-opencode": _PREVIEW,
-    "omo-codex-light": _PREVIEW,
-    "hermes": _PREVIEW,
+_SUPPORT: dict[str, RunnerSupport] = {
+    "claude": RunnerSupport("supported", "primary provider path; still requires local auth/BYOK"),
+    "codex": RunnerSupport("supported", "primary provider path; still requires local auth/BYOK"),
+    "claude-code": RunnerSupport("supported", "primary worker path; still requires local auth/BYOK"),
+    "omo-codex-light": RunnerSupport("preview", "Codex CLI wrapper; advertise only after live probe evidence"),
+    "omo-opencode": RunnerSupport("preview", "OMO/OpenCode path; advertise only after live probe evidence"),
+    "hermes": RunnerSupport("preview", "Hermes local-memory path; advertise only after live probe evidence"),
 }
 
 
 def runner_support(name: str) -> RunnerSupport:
-    """Return the support claim for a runner without probing or executing it."""
-    return _RUNNER_SUPPORT.get(name, _UNKNOWN)
+    return _SUPPORT.get(name, RunnerSupport("preview", "unknown runner; do not advertise without a probe"))

@@ -50,11 +50,10 @@ Agent client:
 python -m pip install -e agent-client
 dipeen-agent doctor
 dipeen-agent bootstrap --dry-run --role FE --workspace "D:/work/your-project" --network cloudflare
-dipeen-agent connect --code <CODE> --api-url <PUBLIC_HTTPS_URL>
-dipeen-agent start
+dipeen-agent join <CODE> --api-url <PUBLIC_HTTPS_URL>
 ```
 
-NAT worker mode:
+`join` connects + starts the worker (single path). To tune capabilities or run once:
 
 ```bash
 dipeen-agent worker --once

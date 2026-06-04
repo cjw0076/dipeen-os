@@ -385,9 +385,11 @@ async def poll_worker_command(worker_id: str, body: WorkerPollBody,
     worker = control_plane.heartbeat_worker(worker_id)
     if not worker:
         raise HTTPException(404, f"Worker {worker_id} not found")
-    command = control_plane.poll_worker_command(worker_id, body.capabilities or worker.capabilities)
+    caps = body.capabilities or worker.capabilities
+    command = control_plane.poll_worker_command(worker_id, caps)
     if not command:
-        return {"command": None}
+        # explain a None poll: which queued commands this worker can't take (capability mismatch)
+        return {"command": None, "unmatched": control_plane.poll_worker_unmatched(caps)}
     await broadcast({
         "type": "command.leased",
         "worker_id": worker_id,

@@ -342,6 +342,11 @@ def poll_worker_command(worker_id: str, capabilities: list[str]) -> Command | No
     return _command_queue().poll(worker_id, capabilities)
 
 
+def poll_worker_unmatched(capabilities: list[str]) -> list[dict]:
+    """Diagnostic for a None poll: queued commands this capability set can't take + what's missing."""
+    return _command_queue().unmatched_capabilities(capabilities)
+
+
 def ack_worker_command(worker_id: str, command_id: str) -> Command | None:
     return _command_queue().ack(command_id, worker_id)
 

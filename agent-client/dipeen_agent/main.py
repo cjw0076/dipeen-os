@@ -85,6 +85,17 @@ def _command_to_legacy_task(command: dict) -> dict:
     }
 
 
+def _format_unmatched(unmatched: list[dict]) -> str:
+    """A None poll explained: capability mismatch (with the missing tokens) vs an empty queue."""
+    if not unmatched:
+        return "대기 중인 작업 없음 (큐 비어있음)."
+    missing = sorted({m for u in unmatched for m in (u.get("missing") or [])})
+    repos = [m.split(".", 1)[1] for m in missing if m.startswith("repo.")]
+    hint = f"  (예: --repo {repos[0]})" if repos else ""
+    return (f"대기 작업 {len(unmatched)}건이 capability 불일치로 안 잡힘 — 필요: "
+            f"{', '.join(missing)}. 이 토큰을 워커 capability에 추가하세요{hint}")
+
+
 async def cmd_worker(once: bool = False, capabilities: str | None = None, idle_sleep: float = 5.0,
                      workspace_ref: str | None = None, repo: str | None = None,
                      workspace: str | None = None) -> None:
@@ -104,16 +115,26 @@ async def cmd_worker(once: bool = False, capabilities: str | None = None, idle_s
     print(f"[worker] Worker ID: {client.agent_id}", flush=True)
     print(f"[worker] Capabilities: {', '.join(caps)}", flush=True)
     _provision_workspace()
-    await client.register_worker(caps, workspaces=workspaces)
+    from .onboarding import build_register_probe
+    probe = build_register_probe(caps)                 # Keystone C: 실제 runnable(설치+auth)만 광고
+    for prov, info in probe.items():
+        mark = "OK" if info.get("runnable") else f"-- ({info.get('blocker') or 'not runnable/auth'})"
+        print(f"[worker] probe provider.{prov}: {mark}", flush=True)
+    await client.register_worker(caps, workspaces=workspaces, probe=probe)
     provision_workspace_files(WORKSPACE, AGENT_ROLE, DEFAULT_PERSONA)
 
+    last_idle_msg = None
     while True:
         await client.worker_heartbeat()
         command = await client.poll_worker_command(caps)
         if not command:
+            idle_msg = _format_unmatched(getattr(client, "last_unmatched", []))
             if once:
-                print("[worker] command 없음", flush=True)
+                print(f"[worker] {idle_msg}", flush=True)
                 return
+            if idle_msg != last_idle_msg:           # throttle: only print when the reason changes
+                print(f"[worker] {idle_msg}", flush=True)
+                last_idle_msg = idle_msg
             await asyncio.sleep(idle_sleep)
             continue
 
@@ -136,7 +157,19 @@ async def cmd_worker(once: bool = False, capabilities: str | None = None, idle_s
 
 
 async def cmd_start() -> None:
-    """등록 + 폴링 루프 시작."""
+    """DEPRECATED — 레거시 roster/presence 경로. 합류해서 일하는 정식 경로는
+    `dipeen-agent join <code> --api-url <url>` (내부적으로 worker). `start`는 NAT 큐 작업을
+    안 잡아 "합류했는데 작업이 안 옴" 혼란의 원인이었다. 호환을 위해 경고 후 worker로 위임한다.
+    (실시간 presence는 후속(T7)에서 worker에 합류 예정 — _cmd_start_legacy 참조.)"""
+    import sys as _sys
+    print("[deprecated] `dipeen-agent start`는 곧 제거됩니다 — "
+          "`dipeen-agent join <code> --api-url <url>` 또는 `dipeen-agent worker --capabilities ...`를 쓰세요. "
+          "지금은 worker로 위임합니다(큐 작업을 실제로 잡도록).", file=_sys.stderr, flush=True)
+    await cmd_worker()
+
+
+async def _cmd_start_legacy() -> None:
+    """등록 + 폴링 루프 시작 (레거시 roster + hermes presence). T7에서 presence를 worker로 이식 후 제거."""
     client = AgentClient()
     runtime = AgentRuntime(client)
 
@@ -240,6 +273,24 @@ async def cmd_start() -> None:
         await client.close()
 
 
+async def cmd_slash(text: str) -> int:
+    """슬래시/자연어 명령 한 줄을 HQ(/api/control/intent)로 보내 *사람 언어* 답을 출력.
+
+    ux-command-layer-v0: 팀원은 team_id/lease_id/JWT를 몰라도 `dipeen-agent slash "/dipeen ask ..."`
+    한 줄로 일을 요청·배정·승인한다. 도달 실패도 HTTP 코드가 아닌 사람 문장으로 안내."""
+    from dipeen_agent.config import DIPEEN_TOKEN
+    headers = {"Authorization": f"Bearer {DIPEEN_TOKEN}"} if DIPEEN_TOKEN else {}
+    async with httpx.AsyncClient(timeout=30) as c:
+        try:
+            r = await c.post(f"{API_URL}/api/control/intent", json={"text": text}, headers=headers)
+            data = r.json()
+        except (httpx.ConnectError, httpx.TimeoutException):
+            print(f"Can't reach Dipeen at {API_URL}. Open the workspace and try again.")
+            return 1
+    print(data.get("message", "(no response)"))
+    return 0 if data.get("ok") else 1
+
+
 async def cmd_status() -> None:
     """API 연결 상태 + 에이전트 정보 출력."""
     print(f"  API URL  : {API_URL}")
@@ -336,10 +387,25 @@ def run() -> None:
     subparsers = parser.add_subparsers(dest="command", help="명령어")
 
     # start
-    start_parser = subparsers.add_parser("start", help="등록 + 폴링 루프 시작")
+    start_parser = subparsers.add_parser("start", help="(deprecated) join/worker로 대체 — worker로 위임")
     
     # status
     subparsers.add_parser("status", help="연결 상태 확인")
+
+    slash_parser = subparsers.add_parser("slash", help='슬래시/자연어 명령 한 줄 실행 (예: dipeen-agent slash "/dipeen status")')
+    slash_parser.add_argument("text", help='명령 텍스트 (예: "/dipeen ask fix the README")')
+
+    task_parser = subparsers.add_parser("task", help="Handoff Runner: 배정된 command를 받아 로컬 agent로 처리(semi-auto)")
+    task_sub = task_parser.add_subparsers(dest="task_command", required=True)
+    tn = task_sub.add_parser("next", help="배정된 다음 command를 lease해 보여준다")
+    tn.add_argument("--capabilities", help="worker capability CSV(기본: provider.claude,provider.codex,workspace.write)")
+    tp = task_sub.add_parser("prompt", help="lease한 command 프롬프트를 .dipeen/prompts/<runner>/<id>.md로 생성")
+    tp.add_argument("command_id")
+    tp.add_argument("--runner", default="claude", help="claude|codex|omo|gemini")
+    tsub = task_sub.add_parser("submit", help="result.md + git diff를 증거로 제출")
+    tsub.add_argument("command_id")
+    tsub.add_argument("--from-file", dest="from_file", required=True, help="결과 요약 파일(예: result.md)")
+    tsub.add_argument("--workspace", help="git diff 캡처 경로(기본: command workspace 또는 현재 디렉토리)")
 
     # worker (NAT Product Alpha)
     worker_parser = subparsers.add_parser("worker", help="NAT Worker 시작(command pull + 실행 + result upload)")
@@ -468,6 +534,13 @@ def run() -> None:
 
     if args.command == "status":
         asyncio.run(cmd_status())
+    elif args.command == "slash":
+        import sys as _sys
+        _sys.exit(asyncio.run(cmd_slash(args.text)))
+    elif args.command == "task":
+        import sys as _sys
+        from . import handoff
+        _sys.exit(asyncio.run(handoff.run(args)))
     elif args.command == "worker":
         asyncio.run(cmd_worker(args.once, args.capabilities, args.idle_sleep,
                                getattr(args, "workspace_ref", None), getattr(args, "repo", None),

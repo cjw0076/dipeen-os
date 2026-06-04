@@ -71,7 +71,7 @@ npm run dev
 cd agent-client
 python -m pip install -e .
 dipeen-agent doctor
-dipeen-agent start
+dipeen-agent join <CODE> --api-url <HQ_URL>
 ```
 
 Optional PM loop:
@@ -89,8 +89,7 @@ On each worker machine:
 python -m pip install -e agent-client
 dipeen-agent doctor
 dipeen-agent bootstrap --dry-run --role FE --workspace "D:/work/your-project" --network cloudflare
-dipeen-agent connect --code <CODE> --api-url <PUBLIC_HTTPS_URL>
-dipeen-agent start
+dipeen-agent join <CODE> --api-url <PUBLIC_HTTPS_URL>
 ```
 
 `bootstrap --dry-run` prints the required packages, Cloudflare status, runner
@@ -110,8 +109,7 @@ python -m app.services.public_tunnel
 Workers connect outbound:
 
 ```bash
-dipeen-agent connect --code <CODE> --api-url <PUBLIC_HTTPS_URL>
-dipeen-agent start
+dipeen-agent join <CODE> --api-url <PUBLIC_HTTPS_URL>
 ```
 
 Legacy VPS routing can still be used:

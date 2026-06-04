@@ -1,7 +1,11 @@
+import getpass
 import json
 import os
 import platform
+import re
+import secrets
 import shutil
+import socket
 from pathlib import Path
 
 # .env 파일 자동 로드 (agent-client/.env)
@@ -22,8 +26,27 @@ if _env_file.exists():
 API_URL = os.environ.get("DIPEEN_API_URL", "http://127.0.0.1:8000")
 
 # 에이전트 식별
-AGENT_ID = os.environ.get("DIPEEN_AGENT_ID", "fe-agent")
 AGENT_ROLE = os.environ.get("DIPEEN_AGENT_ROLE", "Frontend Engineer")
+
+
+def _slug(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (s or "").lower()).strip("-") or "x"
+
+
+def _default_agent_id() -> str:
+    """DIPEEN_AGENT_ID 미지정 시 충돌 없는 고유 식별자: <role>-<user>-<host>-<rand>.
+    여러 팀원/워커가 같은 'fe-agent'로 충돌하던 문제 해소(자동 고유화)."""
+    role = (AGENT_ROLE.split() or ["agent"])[0]
+    try:
+        user = getpass.getuser()
+    except Exception:  # noqa: BLE001
+        user = "user"
+    host = socket.gethostname().split(".")[0]
+    return f"{_slug(role)}-{_slug(user)}-{_slug(host)}-{secrets.token_hex(2)}"
+
+
+# 미지정이면 자동 고유화(아래 1회 평가 = 프로세스당 안정). 명시 지정이 항상 우선.
+AGENT_ID = os.environ.get("DIPEEN_AGENT_ID") or _default_agent_id()
 
 # Phase F: LLM provider + 페르소나 선언
 LLM_PROVIDER = os.environ.get("AGENT_LLM_PROVIDER", "anthropic")

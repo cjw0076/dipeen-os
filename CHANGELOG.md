@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.2] - 2026-06-04 — Registration unification: one join path, less confusion
+
+### Added / Changed
+- **Single join path.** `dipeen-agent join <code> --api-url <url>` is the one way a teammate joins
+  and starts working. `dipeen-agent start` is **deprecated** — it registered in the legacy roster
+  only and silently never leased queued capability commands ("joined but no work"); it now warns
+  and delegates to the worker. Docs/onboarding output unified to `join`.
+- **Auto-unique worker identity.** `DIPEEN_AGENT_ID` unset → `<role>-<user>-<host>-<rand>` instead
+  of every worker colliding on `fe-agent` in the roster. Explicit id still wins.
+- **Capability mismatch is visible.** A None poll now explains itself — the worker prints
+  "대기 작업 N건이 capability 불일치로 안 잡힘 — 필요: repo.X" instead of a silent "no command"
+  (new `CommandQueue.unmatched_capabilities` + `GET poll` returns `unmatched`).
+- **Semi-auto handoff runner shipped.** `dipeen-agent task next | prompt | submit` (+ `handoff.py`)
+  — a human runs the agent and submits evidence (was missing from the public mirror).
+- **DIPEEN_DEBUG moved to an internal note** (not a user toggle; `dipeen open` sets it
+  automatically). Mechanism unchanged.
+
+(Root cause was an unfinished migration from the legacy agent-roster model to the NAT
+capability-worker model; this collapses the user-facing surface onto the worker model.)
+
 ## [0.3.1] - 2026-06-04 — Fix: `dipeen open` mints over HTTP (no split-brain)
 
 ### Fixed

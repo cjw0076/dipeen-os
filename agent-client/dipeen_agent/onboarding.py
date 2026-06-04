@@ -253,8 +253,7 @@ def bootstrap_plan(
             ],
             "agent": [
                 f"dipeen-agent bootstrap --role {role} --workspace \"{workspace}\" --network {network}",
-                f"dipeen-agent connect --code {join_code} --api-url {public_url}",
-                "dipeen-agent start",
+                f"dipeen-agent join {join_code} --api-url {public_url}",
             ],
         },
     }
@@ -409,7 +408,7 @@ def doctor(*, fix: bool = False, runner: str | None = None) -> int:
     if not any_runner:
         print("⚠ 가용 러너 없음 → `dipeen-agent setup` 으로 설치.")
     else:
-        print("→ auth 후 `dipeen-agent start` 로 HQ 합류.")
+        print("→ auth 후 `dipeen-agent join <초대코드> --api-url <HQ주소>` 로 HQ 합류.")
     return 0 if (core_ok and any_runner) else 1
 
 
@@ -444,37 +443,88 @@ def _default_probe_run(argv: list[str]) -> tuple[int, str, str]:
         return (1, "", f"probe error: {e}")
 
 
-def probe_runner(name, *, run=None, which_fn=None) -> dict:
+def _default_auth_check(name: str) -> bool | None:
+    """provider auth(BYOK) 충족 여부 — Keystone C. `--version`은 exit 0이어도 auth를 증명하지
+    않으므로(로그아웃 워커가 'runnable'로 광고되던 갭) claude/codex는 자격증명 존재를 확인한다:
+    env 키 또는 CLI credentials 파일. auth로 게이트하지 않는 provider(omo/hermes)는 None을 반환해
+    기존 probe-exit 의미(비0 exit=unhealthy)를 그대로 유지한다. 키/파일 *내용*은 읽지 않는다(존재만)."""
+    home = Path.home()
+    if name == "claude-code":
+        return bool(os.environ.get("ANTHROPIC_API_KEY")) or (home / ".claude" / ".credentials.json").exists()
+    if name == "omo-codex-light":
+        return (bool(os.environ.get("OPENAI_API_KEY")) or bool(os.environ.get("CODEX_API_KEY"))
+                or (home / ".codex" / "auth.json").exists())
+    return None                                       # auth-gate 대상 아님(probe-exit이 이미 신호)
+
+
+def probe_runner(name, *, run=None, which_fn=None, auth_fn=None) -> dict:
     """러너 하나를 무해 live probe로 진단 — 'installed(PATH)'와 'runnable(probe healthy)'를 분리한다.
 
     Evidence First: omo는 omo 바이너리가 PATH에 있어도 bun 런타임이 없으면 spawnSync bun ENOENT로
     죽는다 → installed=True, runnable=False, blocker="bun". probe는 --version류 무해 호출만 한다(작업 아님).
-    run/which_fn 주입으로 hermetic 테스트. 반환: installed/runnable/blocker/version/support/install_cmd.
+    Keystone C: `--version` exit 0은 auth를 증명하지 않으므로 claude/codex는 auth_fn으로 자격증명
+    존재까지 확인한다(미충족이면 runnable=False, auth=False). auth_fn(name)→None이면 auth-gate 안 함.
+    run/which_fn/auth_fn 주입으로 hermetic 테스트. 반환: installed/runnable/auth/blocker/version/support/install_cmd.
     """
     which_fn = which_fn or shutil.which
     run = run or _default_probe_run
+    auth_fn = auth_fn or _default_auth_check
     spec = _PROBE_SPECS.get(name)
     meta = provisioning().get(name, {})
     support = runner_support(name)
     base = {"runner": name, "support": support.level, "support_note": support.note,
             "install_cmd": meta.get("install_cmd", "")}
     if spec is None:
-        return {**base, "installed": False, "runnable": False, "blocker": None,
+        return {**base, "installed": False, "runnable": False, "auth": None, "blocker": None,
                 "version": None, "reason": f"unknown runner: {name}"}
 
     binary = next((which_fn(b) for b in spec["binaries"] if which_fn(b)), None)
     if not binary:                                    # PATH에 없음 — 설치 안내가 다음 행동
-        return {**base, "installed": False, "runnable": False, "blocker": None,
+        return {**base, "installed": False, "runnable": False, "auth": None, "blocker": None,
                 "version": None, "reason": "binary not found in PATH"}
 
     exit_code, stdout, stderr = run([binary, *spec["args"]])
     blob = (stdout + "\n" + stderr).lower()
     blocker = "bun" if ("spawnsync bun" in blob or "execute bun" in blob) else None
-    runnable = exit_code == 0 and blocker is None     # 정직 — 가짜 healthy 금지
+    auth = auth_fn(name)                              # True | False | None(게이트 안 함)
+    runnable = exit_code == 0 and blocker is None and auth is not False   # auth 미충족이면 광고 금지
     version = next((ln.strip() for ln in stdout.splitlines() if ln.strip()), None) if runnable else None
-    return {**base, "installed": True, "runnable": runnable, "blocker": blocker,
+    reason = "no provider credentials (auth)" if auth is False else None
+    return {**base, "installed": True, "runnable": runnable, "auth": auth, "blocker": blocker,
             "version": version, "binary": binary, "exit": exit_code,
-            "raw": ((stderr or stdout)[:300] or None) if not runnable else None}
+            "raw": reason or (((stderr or stdout)[:300] or None) if not runnable else None)}
+
+
+# provider.<name>(capability) → probe_runner의 runner 이름. fake는 내장이라 probe 대상이 아니다.
+_PROVIDER_TO_RUNNER: dict[str, str] = {
+    "claude": "claude-code",
+    "codex": "omo-codex-light",
+    "omo": "omo-opencode",
+    "hermes": "hermes",
+}
+
+
+def build_register_probe(capabilities, *, probe_fn=None) -> dict:
+    """worker가 register 시 보내는 probe dict — Keystone C(C2).
+
+    advertised `provider.<name>` capability를 실제 runnable 여부로 매핑한다(설치+auth까지). 서버의
+    compute_effective는 *probed-and-not-runnable*인 provider cap만 드롭하므로, 로그아웃/미설치 워커가
+    광고만 하고 실행 못 하는 silent-failure를 register 단계에서 차단한다. 반환 shape는 compute_effective가
+    먹는 `{provider_name: {"runnable": bool, ...}}`. fake(내장)·비 provider cap(role/repo/...)은 제외."""
+    probe_fn = probe_fn or probe_runner
+    out: dict[str, dict] = {}
+    for cap in capabilities:
+        if not cap.startswith("provider."):
+            continue
+        provider = cap.split(".", 1)[1]
+        runner = _PROVIDER_TO_RUNNER.get(provider)
+        if not runner:                                # fake(내장) 등 — probe 안 함(미포함=unprobed로 유지)
+            continue
+        res = probe_fn(runner)
+        out[provider] = {"runnable": bool(res.get("runnable")),
+                         "installed": bool(res.get("installed")),
+                         "blocker": res.get("blocker"), "version": res.get("version")}
+    return out
 
 
 def _doctor_runner(name: str) -> int:
@@ -572,7 +622,7 @@ def setup(*, auto_install: bool = True, dry_run: bool = False) -> int:
             ac = meta.get(h.name, {}).get("auth_cmd")
             if ac:
                 print(f"  {h.name:16} {ac}")
-    print("\n다음: auth 후 `dipeen-agent start` 로 HQ에 합류. (상세: dipeen-agent doctor)")
+    print("\n다음: auth 후 `dipeen-agent join <초대코드> --api-url <HQ주소>` 로 HQ에 합류. (상세: dipeen-agent doctor)")
     return 0
 
 
@@ -634,5 +684,5 @@ def connect(code: str, api_url: str | None = None, *, run_setup: bool = True) ->
     if run_setup:
         print("\n→ 이어서 러너 온보딩(setup)…")
         setup()
-    print("\n준비 끝 → `dipeen-agent start` 로 합류.")
+    print("\n준비 끝 → `dipeen-agent join <초대코드> --api-url <HQ주소>` 로 합류.")
     return 0
