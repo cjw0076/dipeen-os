@@ -42,7 +42,9 @@ def test_open_lecture_prints_public_and_receipt(capsys, monkeypatch):
     out = capsys.readouterr().out
     assert rc == 0
     assert "https://web.trycloudflare.com" in out and "rcpt_L" in out
-    assert "join LEC1" in out
+    # the teammate join command must carry the PUBLIC api url, not localhost (remote teammates)
+    assert "dipeen-agent join LEC1 --api-url https://api.trycloudflare.com" in out
+    assert "localhost" not in out
 
 
 def test_open_lecture_fail_closed_when_expose_refused(capsys, monkeypatch):

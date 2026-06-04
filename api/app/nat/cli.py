@@ -481,9 +481,8 @@ def _cmd_open(args) -> int:
             print(f"  web: {res.web_url}")
             print(f"  api: {res.api_url}")
             print(f"\n{res.message}")
-            print("\nInvite a teammate / agent:")
-            print(f"  {result.join_command}")
-            print(f"  {result.slash_join_command}")
+            print("\nInvite a teammate (they run this on their machine, after `pip install dipeen-agent`):")
+            print(f"  dipeen-agent join {result.invite_code} --api-url {res.api_url}")
             print("\nHolding the public tunnel — press Ctrl+C to close it (HQ stays up).")
             _hold_tunnel()
             return 0
