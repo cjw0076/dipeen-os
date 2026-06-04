@@ -15,7 +15,7 @@ export function useTasks() {
       setTasks(data);
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }

@@ -73,7 +73,7 @@ body {
   display: flex;
   height: 100vh;
   overflow: hidden;
-  background: var(--dp-bg-app);
+  background: var(--ds-bg);
   color: var(--dp-text-soft);
 }
 
@@ -87,16 +87,16 @@ body {
 .dp-sidebar {
   width: var(--dp-sidebar-w);
   flex-shrink: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  background: var(--dp-bg-shell);
+  border-right: 1px solid var(--ds-border);
+  background: color-mix(in srgb, var(--ds-surface) 92%, var(--ds-bg-muted));
   padding: var(--dp-space-5);
-  color: #ffffff;
+  color: var(--ds-text);
 }
 
 .dp-topbar {
   min-height: var(--dp-topbar-h);
   border-bottom: 1px solid var(--dp-border);
-  background: rgba(255, 255, 255, 0.92);
+  background: color-mix(in srgb, var(--ds-surface-raised) 92%, transparent);
   backdrop-filter: blur(16px);
 }
 
@@ -141,9 +141,32 @@ body {
 }
 
 .dp-sidebar .dp-active {
-  background: rgba(37, 99, 235, 0.22);
-  color: #dbeafe;
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.32);
+  background: var(--ds-surface-warm);
+  color: #8b5b22;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #b98545 36%, var(--ds-border));
+}
+
+.dp-sidebar [class~="text-white"],
+.dp-sidebar [class~="text-slate-300"],
+.dp-sidebar [class~="text-slate-400"] {
+  color: var(--ds-text) !important;
+}
+
+.dp-sidebar nav a:not(.dp-active) {
+  color: var(--ds-text-muted) !important;
+}
+
+.dp-sidebar nav a:not(.dp-active):hover {
+  background: var(--ds-surface-warm) !important;
+  color: #8b5b22 !important;
+}
+
+.dp-sidebar [class*="border-white/"] {
+  border-color: var(--ds-border) !important;
+}
+
+.dp-sidebar [class*="bg-white/"] {
+  background: var(--ds-surface-warm) !important;
 }
 
 .dp-page-main {
@@ -160,7 +183,7 @@ body {
 }
 
 .dp-page-main .dp-topbar [class*="bg-white/"] {
-  background: #f8fafc !important;
+  background: var(--ds-surface-warm) !important;
 }
 
 .dp-page-main .dp-topbar [class*="border-white/"] {
@@ -225,14 +248,14 @@ body {
 .dp-panel:not(.dp-dark-surface) [class*="bg-[#0b0d12]"],
 .dp-panel:not(.dp-dark-surface) [class*="bg-[#0b0e13]"],
 .dp-panel:not(.dp-dark-surface) [class*="bg-[#111419]"] {
-  background: #f8fafc !important;
+  background: var(--ds-surface-warm) !important;
 }
 
 .dp-panel:not(.dp-dark-surface) input,
 .dp-panel:not(.dp-dark-surface) textarea,
 .dp-panel:not(.dp-dark-surface) pre {
   border-color: var(--dp-border) !important;
-  background: #ffffff !important;
+  background: var(--ds-surface-raised) !important;
   color: var(--dp-text) !important;
 }
 

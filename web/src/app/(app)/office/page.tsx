@@ -1,5 +1,5 @@
-import { ControlTower } from "@/components/control-plane/ControlTower";
+import { BrandOffice } from "@/components/production/BrandOffice";
 
 export default function OfficePage() {
-  return <ControlTower />;
+  return <BrandOffice />;
 }

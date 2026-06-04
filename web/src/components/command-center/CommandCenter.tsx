@@ -6,6 +6,7 @@ import { useTasks } from "@/hooks/useTasks";
 import { useUsage } from "@/hooks/useUsage";
 import { useChat, type ChatMessage } from "@/hooks/useChat";
 import { api, type Task } from "@/lib/api";
+import { CommandComposer } from "@/components/command/CommandComposer";
 import { BrandIcon, type BrandIconName } from "@/components/ui/brand-icons";
 import { GlassChip, GlassPanel, IconBadge } from "@/components/ui/glass";
 import { Sparkline, TokenDonut, UsageBars, WorkflowGraph } from "@/components/ui/data-viz";
@@ -186,7 +187,7 @@ function ChatPanel({
   messages: ChatMessage[];
   draft: string;
   setDraft: (value: string) => void;
-  onSend: () => void;
+  onSend: (text?: string) => void;
 }) {
   return (
     <section className="flex min-h-[520px] flex-col rounded-lg border border-border bg-bg-card">
@@ -222,24 +223,15 @@ function ChatPanel({
       </div>
 
       <div className="border-t border-border-subtle p-3">
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-bg-elevated px-2.5 py-2">
-          <input
-            className="min-w-0 flex-1 bg-transparent text-[13px] text-text-primary outline-none placeholder:text-text-muted"
-            placeholder="Tell PM-Agent what to plan, dispatch, or inspect..."
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") onSend();
-            }}
-          />
-          <button
-            className="rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-40"
-            disabled={!draft.trim()}
-            onClick={onSend}
-          >
-            Send
-          </button>
-        </div>
+        <CommandComposer
+          minRows={2}
+          onChange={setDraft}
+          onSubmit={(text) => onSend(text)}
+          placeholder="/plan, /assign, /run, /review..."
+          submitLabel="Send"
+          tone="dark"
+          value={draft}
+        />
       </div>
     </section>
   );
@@ -381,7 +373,7 @@ function FlowPanel() {
           <BrandIcon name="workflow" className="h-4 w-4 shrink-0" />
           <span className="text-[13px] font-medium">User Flow</span>
         </div>
-        <a className="text-[10px] text-accent-hover hover:underline" href="/onboarding">Open setup</a>
+        <a className="text-[10px] text-accent-hover hover:underline" href="/office">Open office</a>
       </div>
       <div className="space-y-2 p-3">
         {FLOW_STEPS.map((step, index) => (
@@ -517,8 +509,8 @@ export function CommandCenter() {
     [agents, tasks, usageForMetrics],
   );
 
-  function handleSend() {
-    const text = draft.trim();
+  function handleSend(expandedText?: string) {
+    const text = (expandedText ?? draft).trim();
     if (!text) return;
     setDraft("");
     sendMessage(text);

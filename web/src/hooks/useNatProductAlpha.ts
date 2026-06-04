@@ -59,7 +59,6 @@ export function useNatProductAlpha(roomId?: string) {
   const createProposal = useCallback(async (body: {
     intent: string;
     provider?: string;
-    workspace_root?: string;
     acceptance?: Array<Record<string, unknown>>;
   }) => {
     if (!roomId) throw new Error("Room is not ready");
@@ -67,7 +66,6 @@ export function useNatProductAlpha(roomId?: string) {
       room_id: roomId,
       proposed_by: "user://web",
       provider: body.provider ?? "claude",
-      workspace_root: body.workspace_root ?? "",
       intent: body.intent,
       acceptance: body.acceptance ?? [{ type: "artifact_required", artifact_type: "code_patch" }],
     });

@@ -1,5 +1,5 @@
-import { ControlTower } from "@/components/control-plane/ControlTower";
+import { ProductionControlRoom } from "@/components/production/ProductionControlRoom";
 
 export default function ChatPage() {
-  return <ControlTower />;
+  return <ProductionControlRoom />;
 }

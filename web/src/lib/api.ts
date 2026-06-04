@@ -160,6 +160,7 @@ export interface ControlPlaneEvent {
 }
 
 // ux-command-layer-v0 — /api/control/intent + /api/control/capabilities.
+// One entry for slash + natural language; replies in human words (Workspace/Worker/Task/...).
 export interface ControlIntentResult {
   ok: boolean;
   verb: string;
@@ -203,6 +204,14 @@ export interface ControlPlaneArtifact {
   evidence: ArtifactEvidence[];
   links: Array<Record<string, string>>;
   created_at: string;
+}
+
+export interface ArtifactContent {
+  artifact_id: string;
+  content: string;
+  media_type: string;
+  truncated: boolean;
+  available: boolean;
 }
 
 export interface StateClaim {
@@ -256,6 +265,15 @@ export interface ControlPlaneProvider {
   status: string;
   healthy: boolean;
   last_heartbeat: string | null;
+  source?: "provider_lifecycle" | "agent_roster" | string;
+  kind?: "cli" | "plugin" | "harness" | "worker" | string;
+  installed?: boolean;
+  capability_advertised?: boolean;
+  install_hint?: string;
+  runtime_deps?: Array<Record<string, unknown>>;
+  known_blockers?: string[];
+  recommended_next_action?: string;
+  details?: Record<string, unknown>;
 }
 
 export interface SystemHealthItem {
@@ -324,7 +342,6 @@ export interface CommandProposal {
   proposed_by: string;
   intent: string;
   provider: string;
-  workspace_root: string;
   assignment: AssignmentSpec | null;
   acceptance: Array<Record<string, unknown>>;
   state: string;
@@ -449,14 +466,20 @@ export interface TeamWorkspaceSpec {
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = auth.getToken();
-  const res = await fetch(`${getBase()}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init?.headers,
-    },
-  });
+  const base = getBase();
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch {
+    throw new Error(`Dipeen HQ API is unreachable at ${base}. Start HQ or update NEXT_PUBLIC_API_URL.`);
+  }
   if (res.status === 401) {
     auth.clearToken();
     if (typeof window !== "undefined") window.location.href = "/login";
@@ -475,18 +498,18 @@ export const api = {
         body: JSON.stringify(body),
       }),
   },
+  controlPlane: {
+    summary: () => apiFetch<ControlPlaneSummary>("/api/control-plane/summary"),
+  },
   control: {
-    // Natural-language prompt OR slash text → a real action; reply is human-worded.
+    // Natural-language prompt box OR slash text → a real action; reply is human-worded.
     intent: (text: string, roomId?: string) =>
       apiFetch<ControlIntentResult>("/api/control/intent", {
         method: "POST",
         body: JSON.stringify({ text, ...(roomId ? { room_id: roomId } : {}) }),
       }),
-    // ⌘K palette source — runnable slash templates (curated verbs + capability catalog).
+    // The ⌘K palette source — runnable slash templates (curated verbs + capability catalog).
     capabilities: () => apiFetch<{ commands: PaletteCommand[] }>("/api/control/capabilities"),
-  },
-  controlPlane: {
-    summary: () => apiFetch<ControlPlaneSummary>("/api/control-plane/summary"),
   },
   runs: {
     list: (opts?: { taskId?: string; limit?: number }) => {
@@ -518,6 +541,10 @@ export const api = {
       return apiFetch<ControlPlaneArtifact[]>(`/api/artifacts${suffix}`);
     },
     get: (artifactId: string) => apiFetch<ControlPlaneArtifact>(`/api/artifacts/${artifactId}`),
+    content: (artifactId: string, filename?: string) => {
+      const suffix = filename ? `?filename=${encodeURIComponent(filename)}` : "";
+      return apiFetch<ArtifactContent>(`/api/artifacts/${artifactId}/content${suffix}`);
+    },
   },
   stateClaims: {
     list: (opts?: { taskId?: string; runId?: string }) => {
@@ -587,7 +614,6 @@ export const api = {
       room_id: string;
       intent: string;
       provider?: string;
-      workspace_root?: string;
       proposed_by?: string;
       message_id?: string;
       acceptance?: Array<Record<string, unknown>>;
@@ -609,7 +635,6 @@ export const api = {
       plan: Array<{
         intent: string;
         provider?: string;
-        workspace_root?: string;
         acceptance?: Array<Record<string, unknown>>;
       }>;
     }) =>

@@ -28,8 +28,8 @@ type SpatialIdentityMarkProps = {
 export function SpatialIdentityMark({ compact = false, className, labelClassName, size = "md" }: SpatialIdentityMarkProps) {
   const markSize = {
     sm: "size-9 rounded-[8px] text-base",
-    md: "size-10 rounded-[9px] text-lg",
-    lg: "size-16 rounded-[14px] text-3xl",
+    md: "size-10 rounded-[8px] text-lg",
+    lg: "size-16 rounded-[8px] text-3xl",
   }[size];
   const labelSize = {
     sm: "text-xl",
@@ -38,7 +38,7 @@ export function SpatialIdentityMark({ compact = false, className, labelClassName
   }[size];
   return (
     <div className={cn("flex items-center gap-3", className)}>
-      <span className={cn("grid shrink-0 place-items-center bg-gradient-to-br from-[#684cff] to-[#3568ff] font-black text-white shadow-[0_14px_32px_rgba(62,99,221,0.30)]", markSize)}>
+      <span className={cn("grid shrink-0 place-items-center bg-gradient-to-br from-[#caa06a] to-[#8f6230] font-black text-white shadow-[0_14px_32px_rgba(143,98,48,0.24)]", markSize)}>
         D
       </span>
       {!compact && <span className={cn("font-bold tracking-tight text-[#13233a]", labelSize, labelClassName)}>Dipeen</span>}
@@ -64,7 +64,7 @@ export function SpatialPanel({ children, className, title, description, icon, ac
             {title && (
               <div className="flex items-center gap-2">
                 {icon && <BrandIcon className="shrink-0 text-[var(--ds-primary)]" name={icon} size={18} />}
-                <h2 className="truncate text-sm font-bold text-[var(--ds-text)]">{title}</h2>
+                <h2 className="text-sm font-bold leading-5 text-[var(--ds-text)]">{title}</h2>
               </div>
             )}
             {description && <p className="mt-1 text-xs leading-5 text-[var(--ds-text-muted)]">{description}</p>}

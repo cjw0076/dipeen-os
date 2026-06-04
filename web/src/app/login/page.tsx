@@ -27,9 +27,9 @@ export default function LoginPage() {
         const res = await api.auth.signup(email, password, name);
         auth.setToken(res.access_token);
         localStorage.setItem("dipeen_user_name", res.name);
-        // 팀 없으면 온보딩으로
+        // 팀이 아직 없으면 제거된 onboarding route 대신 brand office로 보낸다.
         if (!res.team_id || res.team_id === "default-team") {
-          router.push("/onboarding");
+          router.push("/office");
         } else {
           router.push("/");
         }
@@ -38,7 +38,7 @@ export default function LoginPage() {
         auth.setToken(res.access_token);
         localStorage.setItem("dipeen_user_name", res.name);
         if (!res.team_id || res.team_id === "default-team") {
-          router.push("/onboarding");
+          router.push("/office");
         } else {
           router.push("/");
         }
@@ -177,13 +177,13 @@ export default function LoginPage() {
               className="w-full justify-between"
               icon="play"
               onClick={() => {
-                setLauncherNotice("Launcher identity is configured during onboarding.");
-                router.push("/onboarding");
+                setLauncherNotice("Launcher identity is configured from the Dipeen Office surface.");
+                router.push("/office");
               }}
               variant="secondary"
               type="button"
             >
-              <span>Open Dipeen Launcher Setup</span>
+              <span>Open Dipeen Office</span>
               <span className="rounded-full bg-[#e7f5ee] px-2 py-1 text-[11px] text-[#4c9a74]">Ready</span>
             </SpatialButton>
             {launcherNotice && <p className="mt-3 text-xs text-slate-500">{launcherNotice}</p>}
