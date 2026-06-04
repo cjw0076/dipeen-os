@@ -1,8 +1,15 @@
 [project]
-name = "dipeen-agent-client"
-version = "0.1.0"
-description = "dipeen Agent Client — polls API, executes opencode, reports results"
+name = "dipeen-agent"
+version = "0.3.0"
+description = "Dipeen Agent — the teammate worker CLI. Joins a Dipeen workspace, pulls only commands it has the capabilities for, runs your local agent (Claude / Codex / OMO / Gemini) with your own keys, and returns evidence."
+readme = { text = "# dipeen-agent\n\nThe teammate worker CLI for [Dipeen](https://github.com/cjw0076/dipeen-os). Join a workspace and bring your own local agent and keys (BYOK).\n\n- `dipeen-agent join <code> --api-url <hq>` — one-command join from a new machine\n- `dipeen-agent task next | prompt | submit` — semi-auto handoff runner (you run the agent, Dipeen collects evidence)\n- `dipeen-agent worker --capabilities provider.claude,role.fe,...` — pull loop\n- `dipeen-agent doctor` — check runners and auth\n\nProvider keys and CLI sessions never leave your machine. The HQ control plane ships separately as `dipeen`.\n", content-type = "text/markdown" }
 requires-python = ">=3.11"
+keywords = ["ai-agents", "worker", "byok", "claude", "codex"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
 dependencies = [
     "httpx>=0.27.0",
     "websockets>=12.0",

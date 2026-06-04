@@ -282,6 +282,36 @@ def reject_proposal(proposal_id: str, *, decided_by: str) -> CommandProposal | N
     )
 
 
+async def mint_team_invite(team_id: str) -> dict:
+    """Mint a fresh single-use invite (24h TTL). Returns {code, expires_at}.
+    Replicates the teams invite core directly (no FastAPI Depends) so the
+    capability layer (dipeen open / /dipeen invite) can mint without HTTP."""
+    import secrets
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models import InviteCode
+    from app.db.session import async_session
+    from app.routers.teams import INVITE_TTL_SEC
+
+    code = secrets.token_urlsafe(6)[:8].upper()
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=INVITE_TTL_SEC)
+    async with async_session() as db:
+        db.add(InviteCode(code=code, team_id=team_id, expires_at=expires_at))
+        await db.commit()
+    return {"code": code, "expires_at": expires_at.strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+
+async def request_session_permission(reason: str) -> str:
+    """Create a PENDING ``session.expose`` permission request (no tunnel — the API can't start a
+    host-local tunnel). policy classifies session.expose as require_human_approval, so submit_request
+    persists it as ``requested``; a human approves later with /dipeen approve. Returns the request id."""
+    req = PermissionRequest(task_id="session", run_id="", requester="user://owner",
+                            action="session.expose", reason=reason, risk="high")
+    permission_nat.submit_request(req, ledger=_permission_ledger(), queue=_command_queue(),
+                                  store_root=str(control_plane_root()))
+    return req.permission_request_id
+
+
 def list_workers() -> list[WorkerInfo]:
     return _worker_registry().all()
 

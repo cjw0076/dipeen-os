@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.3.0] - 2026-06-04 — Capability spine: `dipeen open`, one control intent, ⌘K palette source
+
+### Added
+- **`dipeen open` / `dipeen close`** — host session bootstrap. `dipeen open [--dev]` boots the HQ
+  (uvicorn in `--dev`, otherwise Docker) past the production guard in debug, mints a fresh invite,
+  and prints the Control Tower URL + next actions. `dipeen open lecture` adds an owner-approved
+  public tunnel (host process is the executor; Core executes nothing). `dipeen close` tears down
+  only the tunnel this host started; the HQ stays up.
+- **One control intent** — `POST /api/control/intent` turns slash commands *and* natural-language
+  prose into real actions (ask/assign/approve/deny/status/workers/permissions/open/invite/
+  expose/close) and replies in human words (Workspace / Worker / Task / Evidence / Permission),
+  never `team_id`/`lease_id`/HTTP codes. Backed by a surface-agnostic **capability catalog**
+  (`capability_catalog.py`) + Dipeen's first capabilities (`capabilities_dipeen.py`).
+- **`GET /api/control/capabilities`** — the ⌘K palette source: curated verbs + the capability
+  catalog as runnable slash templates (`needs_input` marks the ones the user finishes typing).
+- **Permissioned `session.expose`** — the capability path creates a PENDING permission request only
+  (the API can't open a host tunnel); the host CLI `dipeen open lecture` is the executor. Decision
+  engine is fail-closed (refuses to expose with auth disabled unless `--allow-insecure-tunnel`).
+- **`control_plane.mint_team_invite` / `request_session_permission`** — non-HTTP entry points so
+  the capability layer can mint invites and file expose requests without FastAPI Depends.
+
+### Changed / Fixed
+- `PermissionAction` literal gains `session.expose`.
+- Distributions renamed for PyPI publish: `dipeen-api` → **`dipeen`**, `dipeen-agent-client` →
+  **`dipeen-agent`** (both 0.3.0; inline readmes + MIT/Alpha classifiers).
+
 ## [0.2.7] - 2026-06-03 — Coordinator (head agent), memory governance, support-level taxonomy
 
 ### Added

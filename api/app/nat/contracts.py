@@ -206,7 +206,7 @@ class Artifact(BaseModel):
 PermissionAction = Literal[
     "workspace.read", "workspace.write", "shell.run", "network.request", "package.install",
     "git.diff", "git.commit", "git.push", "github.issue.create", "github.pr.create",
-    "secret.read", "deployment.run",
+    "secret.read", "deployment.run", "session.expose",
 ]
 
 

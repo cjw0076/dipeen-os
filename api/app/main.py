@@ -10,7 +10,7 @@ from app.config import settings
 from app.db.models import Team
 from app.db.session import engine, async_session, create_tables
 from app.routers import tasks, agents
-from app.routers import events, chat, usage, meeting, onboarding, auth, teams, graph, hermes, projects, decisions, control_plane, workspace
+from app.routers import events, chat, usage, meeting, onboarding, auth, teams, graph, hermes, projects, decisions, control_plane, control, workspace
 
 DEFAULT_TEAM_ID = "default-team"
 
@@ -145,6 +145,7 @@ app.include_router(graph.router, prefix="/api/graph", tags=["graph"])
 app.include_router(hermes.router, tags=["hermes"])
 app.include_router(decisions.router, prefix="/api/decisions", tags=["decisions"])
 app.include_router(control_plane.router, prefix="/api", tags=["control-plane"])
+app.include_router(control.router, prefix="/api/control", tags=["control"])
 app.include_router(workspace.router, prefix="/api/workspace", tags=["workspace"])
 
 

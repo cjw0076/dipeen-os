@@ -306,6 +306,182 @@ async def _cmd_worker(args) -> int:
     return 0
 
 
+# ──────── dipeen open / close (capability spine): host session bootstrap ────────
+def _hq_health(api_url: str) -> bool:
+    import httpx
+    try:
+        return httpx.get(f"{api_url}/health", timeout=2.0).status_code == 200
+    except Exception:
+        return False
+
+
+def _boot_docker() -> tuple[bool, str]:
+    import subprocess
+    try:
+        r = subprocess.run(["docker", "compose", "up", "-d"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=180)
+        return (r.returncode == 0, (r.stderr or r.stdout or "").strip()[:400])
+    except Exception as e:  # noqa: BLE001
+        return (False, str(e)[:400])
+
+
+def _boot_uvicorn() -> tuple[bool, str]:
+    import subprocess
+    try:
+        # Local session: DIPEEN_DEBUG=true boots past the production guard.
+        # Log to a file (not DEVNULL) so a boot failure is diagnosable instead of silent.
+        env = {**os.environ, "DIPEEN_DEBUG": "true"}
+        logf = open("dipeen-hq.log", "a", encoding="utf-8")  # noqa: SIM115 — held open for the HQ's lifetime
+        subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--port", "8000"],
+                         stdout=logf, stderr=logf, env=env)
+        return (True, "")
+    except Exception as e:  # noqa: BLE001
+        return (False, str(e)[:400])
+
+
+def _ensure_team_sync(name) -> dict:
+    # v0 soft-auth single-tenant: reuse the canonical default team.
+    return {"id": "default-team", "name": name or "Dipeen Team"}
+
+
+def _run_open(args):
+    import shutil
+
+    from app.services import control_plane
+    from app.services.open_session import BootDeps, SessionDeps, ensure_hq, open_workspace
+    api_url = getattr(args, "api_url", None) or "http://localhost:8000"
+    web_url = "http://localhost:3000"
+    deps = BootDeps(
+        hq_health=lambda: _hq_health(api_url),
+        docker_available=lambda: bool(shutil.which("docker")),
+        boot_docker=_boot_docker,
+        boot_uvicorn=_boot_uvicorn)
+    boot = ensure_hq(mode=("uvicorn" if getattr(args, "dev", False) else "auto"), deps=deps)
+    sdeps = SessionDeps(
+        ensure_team=_ensure_team_sync,
+        mint_invite=lambda tid: asyncio.run(control_plane.mint_team_invite(tid)))
+    return open_workspace(team=getattr(args, "team", None), api_url=api_url, web_url=web_url,
+                          deps=sdeps, hq_started_by_us=boot.hq_started_by_us)
+
+
+# The HOST process is the executor: it requests+auto-approves expose and holds cloudflared.
+cli_state = {"tunnel_proc": None}
+
+
+def _run_expose(args, hq_started_by_us: bool):
+    """Host-side expose: owner auto-approve + REAL tunnel (this process holds cloudflared)."""
+    import os
+
+    from app.services import control_plane
+    from app.services.session_expose import ExposeDeps, request_expose
+    _tunnel: dict = {}
+
+    def _create():
+        return asyncio.run(control_plane.request_session_permission(
+            "Expose this Dipeen workspace over a public tunnel"))
+
+    def _approve(pid):
+        control_plane.approve_permission(pid, decided_by="user://owner")
+
+    def _receipt(pid):
+        return f"rcpt_{pid[:8]}"
+
+    def _tunnel_start():
+        proc, web, api = _start_tunnel_real()
+        _tunnel["proc"] = proc
+        return (web, api)
+
+    deps = ExposeDeps(
+        require_auth=lambda: os.environ.get("DIPEEN_REQUIRE_AUTH", "").lower() in ("1", "true", "yes"),
+        create_permission=_create, approve_permission=_approve,
+        write_receipt=_receipt, start_tunnel=_tunnel_start)
+    res = request_expose(owner_auto_approve=True,
+                         allow_insecure=getattr(args, "allow_insecure_tunnel", False), deps=deps)
+    cli_state["tunnel_proc"] = _tunnel.get("proc")
+    return res
+
+
+def _start_tunnel_real():
+    """Map start_dual_tunnel's 4-tuple to (proc, web_url, api_url); bundle both procs."""
+    from app.services.public_tunnel import start_dual_tunnel
+
+    class _DualTunnelProc:
+        def __init__(self, *procs):
+            self._procs = [p for p in procs if p is not None]
+
+        def terminate(self):
+            for p in self._procs:
+                try:
+                    p.terminate()
+                except Exception:  # noqa: BLE001
+                    pass
+
+    api_proc, api_url, web_proc, web_url = start_dual_tunnel()
+    return _DualTunnelProc(api_proc, web_proc), web_url, api_url
+
+
+def _hold_tunnel():
+    """Block until Ctrl+C, then tear down only the tunnel we started."""
+    try:
+        import time
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        proc = cli_state.get("tunnel_proc")
+        if proc is not None:
+            try:
+                proc.terminate()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def _cmd_close(args) -> int:
+    proc = cli_state.get("tunnel_proc")
+    if proc is not None:
+        try:
+            proc.terminate()
+        except Exception:  # noqa: BLE001
+            pass
+    print("Tunnel closed. Dipeen HQ is still running.\nStop HQ:  docker compose down")
+    return 0
+
+
+def _cmd_open(args) -> int:
+    from app.services.open_session import EnsureHqError
+    from app.services.open_session_format import format_open_local
+    try:
+        result = _run_open(args)
+    except EnsureHqError as e:
+        msg = e.human
+        if getattr(args, "verbose", False) and e.detail:
+            msg += f"\n\n[verbose] {e.detail}"
+        print(msg)
+        return 1
+    if getattr(args, "preset", None) == "lecture":
+        res = _run_expose(args, result.hq_started_by_us)
+        if res.ok and res.tunnel_started:
+            print("Dipeen workspace is open — PUBLIC (lecture).\n")
+            print("Public Control Tower:")
+            print(f"  web: {res.web_url}")
+            print(f"  api: {res.api_url}")
+            print(f"\n{res.message}")
+            print("\nInvite a teammate / agent:")
+            print(f"  {result.join_command}")
+            print(f"  {result.slash_join_command}")
+            print("\nHolding the public tunnel — press Ctrl+C to close it (HQ stays up).")
+            _hold_tunnel()
+            return 0
+        # fail-closed: HQ still opened locally; surface the refusal + the local session.
+        print(res.message)
+        print()
+        print(format_open_local(result))
+        return 0
+    print(format_open_local(result))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="dipeen", description="Dipeen NAT CLI (M5 in-process)")
     p.add_argument("--store", default=_DEFAULT_STORE, help="NAT 저장 루트(기본 ./nat-workspace)")
@@ -381,6 +557,19 @@ def build_parser() -> argparse.ArgumentParser:
     dm = sub.add_parser("demo", help="API 키 없이 Product Alpha 가치를 한 명령으로 시연(진짜 증거)")
     dm.set_defaults(fn=lambda a: __import__("app.demo.product_alpha", fromlist=["main"]).main())
     add_workspace_parser(sub)
+
+    op = sub.add_parser("open", help="호스트 세션 열기: HQ 부팅(필요시) + team + fresh invite + 다음 액션")
+    op.add_argument("preset", nargs="?", choices=["lecture"], default=None, help="lecture = public expose")
+    op.add_argument("--team", default=None)
+    op.add_argument("--api-url", default=None)
+    op.add_argument("--dev", action="store_true", help="docker 대신 uvicorn 로컬 부팅")
+    op.add_argument("--allow-insecure-tunnel", action="store_true",
+                    help="lecture: 인증 비활성 상태에서도 public expose 강제(명시적 override)")
+    op.add_argument("--verbose", action="store_true")
+    op.set_defaults(fn=_cmd_open)
+
+    cl = sub.add_parser("close", help="현재 호스트가 띄운 public tunnel 종료(HQ는 유지)")
+    cl.set_defaults(fn=_cmd_close)
     return p
 
 
