@@ -344,10 +344,21 @@ def _ensure_team_sync(name) -> dict:
     return {"id": "default-team", "name": name or "Dipeen Team"}
 
 
+def _mint_invite_http(api_url: str, team_id: str) -> dict:
+    """Mint an invite over the running HQ's HTTP API — uses whatever DB the HQ actually uses
+    (no split-brain), mirroring _hq_health. ensure_hq guarantees the HQ is healthy first, and
+    its lifespan has already created the schema + seeded the default team, so this works whether
+    we just booted the HQ or attached to one that was already up."""
+    import httpx
+    r = httpx.post(f"{api_url}/api/teams/{team_id}/invite", timeout=10.0)
+    r.raise_for_status()
+    d = r.json()
+    return {"code": d["code"], "expires_at": d["expires_at"]}
+
+
 def _run_open(args):
     import shutil
 
-    from app.services import control_plane
     from app.services.open_session import BootDeps, SessionDeps, ensure_hq, open_workspace
     api_url = getattr(args, "api_url", None) or "http://localhost:8000"
     web_url = "http://localhost:3000"
@@ -357,9 +368,12 @@ def _run_open(args):
         boot_docker=_boot_docker,
         boot_uvicorn=_boot_uvicorn)
     boot = ensure_hq(mode=("uvicorn" if getattr(args, "dev", False) else "auto"), deps=deps)
+    # Mint over the HQ's HTTP API (not an in-process DB write): ensure_hq has confirmed the HQ
+    # healthy, so this targets the DB the HQ actually uses — fixes "no such table: invite_codes"
+    # when attaching to an already-running HQ (or one on a different DB).
     sdeps = SessionDeps(
         ensure_team=_ensure_team_sync,
-        mint_invite=lambda tid: asyncio.run(control_plane.mint_team_invite(tid)))
+        mint_invite=lambda tid: _mint_invite_http(api_url, tid))
     return open_workspace(team=getattr(args, "team", None), api_url=api_url, web_url=web_url,
                           deps=sdeps, hq_started_by_us=boot.hq_started_by_us)
 

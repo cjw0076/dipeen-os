@@ -60,6 +60,34 @@ def test_open_lecture_fail_closed_when_expose_refused(capsys, monkeypatch):
     assert "Refusing to expose" in out   # the refusal is surfaced; HQ still opened locally
 
 
+def test_open_mints_over_http_not_in_process_db(monkeypatch):
+    """Regression: when an HQ is already healthy, `dipeen open` must mint the invite over the
+    HQ's HTTP API (which uses the HQ's real DB + lifespan-seeded default team), never via an
+    in-process DB write to a local file the HQ may not read. (Bug: sqlite no such table:
+    invite_codes when attaching to an already-running HQ / one on a different DB.)"""
+    import types
+    import app.services.control_plane as cp
+
+    monkeypatch.setattr(cli, "_hq_health", lambda url: True)            # HQ already up
+    def _no_boot():
+        raise AssertionError("must not boot uvicorn when an HQ is already healthy")
+    monkeypatch.setattr(cli, "_boot_uvicorn", _no_boot)
+    def _no_inprocess(*a, **k):
+        raise AssertionError("dipeen open must mint over HTTP, not via an in-process DB write")
+    monkeypatch.setattr(cp, "mint_team_invite", _no_inprocess)
+    seen = {}
+    def _fake_http(api_url, team_id):
+        seen["api_url"] = api_url
+        seen["team_id"] = team_id
+        return {"code": "HTTP1234", "expires_at": "2026-06-05T00:00:00Z"}
+    monkeypatch.setattr(cli, "_mint_invite_http", _fake_http)
+
+    result = cli._run_open(types.SimpleNamespace(api_url=None, dev=True, team=None))
+    assert result.invite_code == "HTTP1234"
+    assert seen["team_id"] == "default-team"
+    assert seen["api_url"] == "http://localhost:8000"
+
+
 def test_close_command_prints_hq_stays(capsys, monkeypatch):
     rc = cli.main(["close"])
     out = capsys.readouterr().out
