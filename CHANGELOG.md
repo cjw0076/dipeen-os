@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.1] - 2026-06-04 — Fix: `dipeen open` mints over HTTP (no split-brain)
+
+### Fixed
+- **`dipeen open` no longer crashes with `no such table: invite_codes`** when attaching to an
+  already-running HQ (or one on a different DB). `ensure_hq` skips boot when an HQ is healthy, so
+  the CLI never ran `create_tables()`; but invite minting wrote in-process to a local `api/dipeen.db`
+  the HQ doesn't read (split-brain). The CLI now mints over the HQ's HTTP API
+  (`POST /api/teams/{id}/invite`), mirroring `_hq_health` — the HQ's lifespan already seeds the
+  schema + default team, so this works for both cold-boot and attach, against the DB the HQ actually
+  uses. In-process `mint_team_invite` stays for the in-server capability path. Regression test added.
+  (Only `dipeen` is affected; `dipeen-agent` is unchanged and stays 0.3.0 on PyPI.)
+
 ## [0.3.0] - 2026-06-04 — Capability spine: `dipeen open`, one control intent, ⌘K palette source
 
 ### Added

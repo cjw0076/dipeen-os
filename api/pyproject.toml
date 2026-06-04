@@ -1,6 +1,6 @@
 [project]
 name = "dipeen"
-version = "0.3.0"
+version = "0.3.1"
 description = "Dipeen — the local-first control plane where AI agents become accountable teammates. Installs the `dipeen` host CLI (open/close/demo/task/worker/permission)."
 readme = { text = "# Dipeen\n\nThe local-first control plane where AI agents become accountable teammates. This package installs the `dipeen` host CLI and the Dipeen HQ control plane.\n\n- `dipeen demo` — no-key deterministic proof of the team loop\n- `dipeen open [--dev]` — boot the HQ, mint an invite, print the Control Tower URL\n- Capability routing, evidence-first completion, permissioned action (dry-run by default)\n\nDipeen assigns work, renders local-agent prompts, and collects evidence from local execution. It does not auto-drive your agents yet.\n\nThe teammate worker CLI ships separately as `dipeen-agent`. See https://github.com/cjw0076/dipeen-os\n", content-type = "text/markdown" }
 requires-python = ">=3.11"
