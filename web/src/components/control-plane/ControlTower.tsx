@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CommandPalette } from "@/components/command/CommandPalette";
 import { DecisionNudgePanel } from "@/components/decisions/DecisionNudgePanel";
 import { AssignmentRouting } from "@/components/control-plane/AssignmentRouting";
 import { ProductFlowSpine, buildSignalsFromLiveState, type ProductFlowCounts } from "@/components/control-plane/ProductFlowMap";
@@ -16,7 +17,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { useTasks } from "@/hooks/useTasks";
 import { useUsage } from "@/hooks/useUsage";
 import { useWorkspaceSpec } from "@/hooks/useWorkspaceSpec";
-import { api, getApiBaseUrl, type CommandProposal, type ControlPlaneArtifact, type ControlPlaneEvent, type ControlPlaneRun, type PermissionApproveResult, type Task, type WorkerCommand, type WorkerInfo } from "@/lib/api";
+import { api, getApiBaseUrl, type CommandProposal, type ControlPlaneArtifact, type ControlPlaneEvent, type ControlPlaneRun, type PaletteCommand, type PermissionApproveResult, type Task, type WorkerCommand, type WorkerInfo } from "@/lib/api";
 
 const navItems = dipeenNavItems;
 
@@ -616,6 +617,34 @@ function RunTimeline({ events }: { events: ControlPlaneEvent[] }) {
   );
 }
 
+// Distinguishes HQ-verified evidence from worker self-reported claims (Evidence First).
+function evidenceSource(kind: string): "verified" | "reported" | "neutral" {
+  if (kind.includes("_verified") || kind === "git_diff_exists") return "verified";
+  if (kind.endsWith("_reported") || kind === "tests_passed") return "reported";
+  return "neutral";
+}
+
+function readableEvidenceKind(kind: string): string {
+  return kind.replace(/_verified$|_reported$/, "").replace(/_/g, " ").trim() || kind;
+}
+
+// A single evidence chip surfacing provenance: blue = Verified by Dipeen, amber = Reported by
+// worker (unverified), emerald/red = neutral OK/Fail. A failed check stays red regardless.
+function evidenceChip(item: { kind: string; passed: boolean }, key: string) {
+  const source = evidenceSource(item.kind);
+  const label = readableEvidenceKind(item.kind);
+  if (!item.passed) {
+    return <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700" key={key} title="Check failed">{`Fail ${label}`}</span>;
+  }
+  if (source === "verified") {
+    return <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700" key={key} title="Verified by Dipeen">{`✓ Verified · ${label}`}</span>;
+  }
+  if (source === "reported") {
+    return <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700" key={key} title="Reported by worker — not independently verified">{`⚑ Reported · ${label}`}</span>;
+  }
+  return <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700" key={key}>{`OK ${label}`}</span>;
+}
+
 function LatestArtifacts({ artifacts }: { artifacts: ControlPlaneArtifact[] }) {
   return (
     <Panel className="min-h-[260px]">
@@ -628,6 +657,11 @@ function LatestArtifacts({ artifacts }: { artifacts: ControlPlaneArtifact[] }) {
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-slate-900">{artifactLabel(artifact.type)}</p>
                 <p className="truncate text-[11px] text-slate-500">{artifact.task_id} · {artifact.evidence.length} checks · {formatRelative(artifact.created_at)}</p>
+                {artifact.evidence.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {artifact.evidence.slice(0, 4).map((item, i) => evidenceChip(item, `${artifact.artifact_id}-${i}`))}
+                  </div>
+                )}
               </div>
               <span className={`self-center rounded-full px-2 py-0.5 text-[10px] ring-1 ${statusTone(artifact.status)}`}>{artifact.status}</span>
             </Link>
@@ -833,6 +867,81 @@ function ProductAlphaCommandPanel({
   );
 }
 
+function CommandBar({
+  busy,
+  inputRef,
+  lastIntent,
+  onOpenPalette,
+  onPickNextAction,
+  onSubmit,
+  setValue,
+  value,
+}: {
+  busy: boolean;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  lastIntent: { ok: boolean; message: string; nextActions: string[] } | null;
+  onOpenPalette: () => void;
+  onPickNextAction: (text: string) => void;
+  onSubmit: () => void;
+  setValue: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex items-center gap-2">
+        <input
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-blue-200 placeholder:text-slate-400 focus:ring-2"
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onSubmit();
+            }
+          }}
+          placeholder={'Tell Dipeen what to do — e.g. assign cap:claude "fix the login bug"   (⌘K for commands)'}
+          ref={inputRef}
+          value={value}
+        />
+        <button
+          className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          disabled={busy || !value.trim()}
+          onClick={onSubmit}
+          type="button"
+        >
+          {busy ? "Running…" : "Run"}
+        </button>
+        <button
+          className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-500"
+          onClick={onOpenPalette}
+          title="Command palette"
+          type="button"
+        >
+          ⌘K
+        </button>
+      </div>
+      {lastIntent && (
+        <div className={`mt-2 rounded-lg border px-3 py-2 text-sm ${lastIntent.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+          <p className="whitespace-pre-wrap font-medium">{lastIntent.message}</p>
+          {lastIntent.nextActions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {lastIntent.nextActions.map((action, i) => (
+                <button
+                  className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700"
+                  key={i}
+                  onClick={() => onPickNextAction(action)}
+                  type="button"
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ControlTower() {
   const { spec: workspaceSpec, loading: workspaceSpecLoading, error: workspaceSpecError, refetch: refetchWorkspaceSpec } = useWorkspaceSpec();
   const { summary, loading, error, refetch: refetchSummary } = useControlPlaneSummary();
@@ -855,6 +964,11 @@ export function ControlTower() {
   } = useNatProductAlpha(activeRoomId);
   const [activeFocus, setActiveFocus] = useState<FocusKey>("overview");
   const [refreshing, setRefreshing] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [intentText, setIntentText] = useState("");
+  const [intentBusy, setIntentBusy] = useState(false);
+  const [lastIntent, setLastIntent] = useState<{ ok: boolean; message: string; nextActions: string[] } | null>(null);
+  const intentRef = useRef<HTMLInputElement>(null);
   const workspacePanelSet = useMemo(() => new Set(workspaceSpec?.ui.panels ?? []), [workspaceSpec?.ui.panels]);
   const hasWorkspacePanel = (panel: string) => {
     return workspacePanelSet.has(panel);
@@ -975,6 +1089,46 @@ export function ControlTower() {
     }
   };
 
+  const submitIntent = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setIntentBusy(true);
+    try {
+      const result = await api.control.intent(trimmed, activeRoomId);
+      const nextActions = Array.isArray(result.data?.next_actions) ? (result.data!.next_actions as string[]) : [];
+      setLastIntent({ ok: result.ok, message: result.message, nextActions });
+      if (result.ok) setIntentText("");
+      await Promise.allSettled([refetchSummary(), refetchNat()]);
+    } catch (e) {
+      setLastIntent({ ok: false, message: e instanceof Error ? e.message : String(e), nextActions: [] });
+    } finally {
+      setIntentBusy(false);
+    }
+  }, [activeRoomId, refetchNat, refetchSummary]);
+
+  const onPaletteSelect = useCallback((cmd: PaletteCommand) => {
+    setPaletteOpen(false);
+    if (cmd.needs_input) {
+      setIntentText(cmd.template);
+      window.setTimeout(() => intentRef.current?.focus(), 10);
+    } else {
+      void submitIntent(cmd.template);
+    }
+  }, [submitIntent]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      } else if (event.key === "Escape" && paletteOpen) {
+        setPaletteOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [paletteOpen]);
+
   return (
     <div className="dp-app">
       <Sidebar roomId={activeRoomId} workspaceName={projectName} />
@@ -1018,6 +1172,20 @@ export function ControlTower() {
               Loading TeamWorkspaceSpec from host CLI / HQ...
             </div>
           )}
+
+          <CommandBar
+            busy={intentBusy}
+            inputRef={intentRef}
+            lastIntent={lastIntent}
+            onOpenPalette={() => setPaletteOpen(true)}
+            onPickNextAction={(text) => {
+              setIntentText(text);
+              window.setTimeout(() => intentRef.current?.focus(), 10);
+            }}
+            onSubmit={() => void submitIntent(intentText)}
+            setValue={setIntentText}
+            value={intentText}
+          />
 
           <ProductionSignalBar
             activeFocus={activeFocus}
@@ -1116,6 +1284,7 @@ export function ControlTower() {
           )}
         </div>
       </main>
+      <CommandPalette onClose={() => setPaletteOpen(false)} onSelect={onPaletteSelect} open={paletteOpen} />
     </div>
   );
 }

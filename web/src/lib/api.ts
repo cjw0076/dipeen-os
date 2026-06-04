@@ -159,6 +159,21 @@ export interface ControlPlaneEvent {
   created_at: string;
 }
 
+// ux-command-layer-v0 — /api/control/intent + /api/control/capabilities.
+export interface ControlIntentResult {
+  ok: boolean;
+  verb: string;
+  message: string;
+  data: (Record<string, unknown> & { next_actions?: string[] }) | null;
+}
+
+export interface PaletteCommand {
+  id: string;
+  label: string;
+  template: string;      // ready-to-run slash text; submit to /api/control/intent
+  needs_input: boolean;  // true → user finishes typing before submit
+}
+
 export interface ArtifactLocation {
   uri: string;
   sha256: string | null;
@@ -459,6 +474,16 @@ export const api = {
         method: "POST",
         body: JSON.stringify(body),
       }),
+  },
+  control: {
+    // Natural-language prompt OR slash text → a real action; reply is human-worded.
+    intent: (text: string, roomId?: string) =>
+      apiFetch<ControlIntentResult>("/api/control/intent", {
+        method: "POST",
+        body: JSON.stringify({ text, ...(roomId ? { room_id: roomId } : {}) }),
+      }),
+    // ⌘K palette source — runnable slash templates (curated verbs + capability catalog).
+    capabilities: () => apiFetch<{ commands: PaletteCommand[] }>("/api/control/capabilities"),
   },
   controlPlane: {
     summary: () => apiFetch<ControlPlaneSummary>("/api/control-plane/summary"),
